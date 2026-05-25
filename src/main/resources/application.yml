@@ -1,0 +1,18 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5433/netflix_clone_db
+    username: postgres
+    password: netflix123 # Change this!
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    # This is the magic line. 'update' tells Hibernate to look at your Java classes
+    # and automatically CREATE or UPDATE the Postgres tables to match them.
+    hibernate:
+      ddl-auto: update
+
+    show-sql: true # Prints the SQL queries in your console so you can learn what it's doing
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
