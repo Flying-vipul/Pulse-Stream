@@ -2,21 +2,153 @@ package com.netflix.streaming.platform.service;
 
 import com.netflix.streaming.platform.model.User;
 import com.netflix.streaming.platform.repositories.UserRepository;
+import com.netflix.streaming.platform.security.jwt.JwtUtils;
+import com.netflix.streaming.platform.security.request.LoginRequest;
+import com.netflix.streaming.platform.security.request.SignupRequest;
+import com.netflix.streaming.platform.security.response.MessageResponse;
+import com.netflix.streaming.platform.security.response.UserInfoResponse;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.LocalDateTime;
 
 @Service
-public class AuthServiceImpl {
-
-
+public class AuthServiceImpl implements AuthService {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private AuthenticationManager authenticationManager;
+
+    @Autowired
+    private JwtUtils jwtUtils;
+
+
+    @Autowired
+    private PasswordEncoder encoder;
+
+    @Autowired
+    private EmailService emailService;
+
+    @Autowired
+    private FileService fileService;
+
+    @Value("${image.base.url:http://localhost:8080/images/}")
+    private String imageBaseUrl;
+
+    @Override
+    public UserInfoResponse authenticateUser(LoginRequest loginRequest) {
+        User user = userRepository.findByEmail(loginRequest.getEmail())
+                .orElseThrow(() -> new RuntimeException("Error: User not found."));
+
+        if (!user.isVerified()) {
+            throw new RuntimeException("Error: Please verify your email with the OTP before logging in.");
+        }
+
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(loginRequest.getEmail(), loginRequest.getPassword())
+        );
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        String jwtToken = jwtUtils.generateTokenFromEmail(userDetails.getUsername());
+
+        return new UserInfoResponse(
+                userDetails.getId(),
+                jwtToken,
+                userDetails.getUsername(),
+                user.getPlanTier().name(),
+                constructAvatarUrl(user.getAvatarUrl())
+        );
+    }
+
+    @Override
+    public MessageResponse registerUser(SignupRequest signupRequest) {
+        if (userRepository.existsByEmail(signupRequest.getEmail())) {
+            throw new RuntimeException("Error: Email is already in use by another account!");
+        }
+
+        User user = new User(
+                signupRequest.getEmail(),
+                encoder.encode(signupRequest.getPassword()),
+                signupRequest.getPlanTier()
+        );
+
+        userRepository.save(user);
+
+        try {
+            String generatedOtp = generateAndSetOtp(user.getEmail());
+            emailService.sendOtpEmail(user.getEmail(), generatedOtp);
+        } catch (Exception e) {
+            throw new RuntimeException("Account created, but failed to send verification email.");
+        }
+
+        return new MessageResponse("Welcome to PulseStream! Please check your email for your 6-digit verification code.");
+    }
+
+    @Override
+    public UserInfoResponse getUserDetails(Authentication authentication) {
+        UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        User userRecord = userRepository.findByEmail(userDetails.getUsername())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        return new UserInfoResponse(
+                userDetails.getId(),
+                null,
+                userDetails.getUsername(),
+                userRecord.getPlanTier().name(),
+                constructAvatarUrl(userRecord.getAvatarUrl())
+        );
+    }
+
+    @Override
+    public UserInfoResponse uploadAvatar(MultipartFile image, Authentication authentication) {
+        User user = userRepository.findByEmail(authentication.getName())
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        try {
+            String uploadedFileName = fileService.uploadImage("avatars", image);
+            user.setAvatarUrl(uploadedFileName);
+            userRepository.save(user);
+
+            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+            return new UserInfoResponse(
+                    userDetails.getId(),
+                    null,
+                    userDetails.getUsername(),
+                    user.getPlanTier().name(),
+                    constructAvatarUrl(uploadedFileName)
+            );
+        } catch (Exception e) {
+            throw new RuntimeException("Avatar upload failed", e);
+        }
+    }
+
+    // --- Helper Method for Avatar URL Construction ---
+    private String constructAvatarUrl(String avatarIdentifier) {
+        if (avatarIdentifier == null || avatarIdentifier.trim().isEmpty()) {
+            return imageBaseUrl.endsWith("/") ? imageBaseUrl + "default-avatar.png" : imageBaseUrl + "/default-avatar.png";
+        }
+        if (avatarIdentifier.startsWith("http://") || avatarIdentifier.startsWith("https://")) {
+            return avatarIdentifier;
+        }
+        return imageBaseUrl.endsWith("/") ? imageBaseUrl + avatarIdentifier : imageBaseUrl + "/" + avatarIdentifier;
+    }
+
+
+
+
 
     // Cryptographically Secure Random Number Generator
     private static final SecureRandom secureRandom = new SecureRandom();
