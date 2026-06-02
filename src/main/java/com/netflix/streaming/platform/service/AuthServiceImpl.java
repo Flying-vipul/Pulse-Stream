@@ -62,7 +62,8 @@ public class AuthServiceImpl implements AuthService {
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-        String jwtToken = jwtUtils.generateTokenFromEmail(userDetails.getUsername());
+        assert userDetails != null;
+        String jwtToken = jwtUtils.generateJwtToken(userDetails);
 
         return new UserInfoResponse(
                 userDetails.getId(),
