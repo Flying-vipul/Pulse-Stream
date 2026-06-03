@@ -38,10 +38,16 @@ public class JwtUtils {
         return null;
     }
 
-    // 2. GENERATE TOKEN (Using Email for Streaming Auth)
-    public String generateTokenFromEmail(String email) {
+    // 2. GENERATE TOKEN (Baking the Role into the VIP Pass!)
+    public String generateJwtToken(UserDetails userDetails) {
+        String email = userDetails.getUsername();
+
+        // Grab the first role (e.g., "ROLE_ADMIN")
+        String role = userDetails.getAuthorities().iterator().next().getAuthority();
+
         return Jwts.builder()
                 .subject(email)
+                .claim("role", role) // <--- THIS IS THE MAGIC VIP PASS!
                 .issuedAt(new Date())
                 .expiration(new Date((new Date().getTime() + jwtExpirationMs)))
                 .signWith(key())
