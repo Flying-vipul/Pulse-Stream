@@ -59,4 +59,33 @@ public class EmailService {
             throw e;
         }
     }
+
+    /**
+     * 🛡️ THE FIX: General Purpose Email Sender (For Payment Receipts!)
+     */
+    @Async
+    @Retryable(
+            retryFor = {Exception.class},
+            maxAttempts = 3,
+            backoff = @Backoff(delay = 2000)
+    )
+    public void sendSimpleMessage(String toEmail, String subject, String body) {
+        logger.info("Attempting to send standard email to: {}", toEmail);
+
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+
+            message.setFrom(senderEmail);
+            message.setTo(toEmail);
+            message.setSubject(subject);
+            message.setText(body);
+
+            mailSender.send(message);
+            logger.info("✅ SUCCESS: Standard email sent to: {}", toEmail);
+
+        } catch (Exception e) {
+            logger.warn("⚠️ FAILED to send standard email to {}. Retrying... Error: {}", toEmail, e.getMessage());
+            throw e;
+        }
+    }
 }
