@@ -28,6 +28,20 @@ public class AuthTokenFilter extends OncePerRequestFilter {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthTokenFilter.class);
 
+    // 🛡️ BYPASS: Skip JWT processing entirely for public media paths.
+    // This is the critical fix for the %03d HLS segment 401 bug.
+    // Spring Security's pattern matcher can choke on URL-encoded special chars
+    // in segment filenames (e.g., stream_%03d.ts), causing permitAll() to be bypassed.
+    // By returning true here, those requests NEVER reach the auth logic.
+    @Override
+    protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
+        String path = request.getRequestURI();
+        return path.startsWith("/videos/")
+                || path.startsWith("/images/")
+                || path.startsWith("/avatars/")
+                || path.startsWith("/streams/");
+    }
+
     @Override
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
