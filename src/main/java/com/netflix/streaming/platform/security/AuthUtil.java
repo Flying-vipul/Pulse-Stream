@@ -19,6 +19,7 @@ public class AuthUtil {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
 
         // Spring Security stores the email (or username) in the 'name' field of the authentication object
+        assert authentication != null;
         String email = authentication.getName();
 
         return userRepository.findByEmail(email)
