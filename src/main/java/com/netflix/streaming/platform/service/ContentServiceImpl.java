@@ -51,29 +51,40 @@ public class ContentServiceImpl implements ContentService {
     @Override
     public ContentResponse getAllContent(Integer pageNumber, Integer pageSize, String sortBy, String sortOrder) {
 
-        // 1. Setup Pagination & Sorting Math
         Sort sortByAndOrder = sortOrder.equalsIgnoreCase("asc")
                 ? Sort.by(sortBy).ascending()
                 : Sort.by(sortBy).descending();
 
         Pageable pageDetails = PageRequest.of(pageNumber, pageSize, sortByAndOrder);
-
-        // 2. Fetch the raw Database Entities (Safely batched by 10)
         Page<Content> pageContent = contentRepository.findAll(pageDetails);
-        List<Content> contents = pageContent.getContent();
 
-        // 3. Map to DTOs and Construct Cloudinary URLs
-        List<ContentDTO> contentDTOs = contents.stream()
+        return buildContentResponse(pageContent);
+    }
+
+    @Override
+    public ContentResponse getContentByType(com.netflix.streaming.platform.model.MediaType type, Integer pageNumber, Integer pageSize, String sortBy, String sortOrder) {
+
+        Sort sortByAndOrder = sortOrder.equalsIgnoreCase("asc")
+                ? Sort.by(sortBy).ascending()
+                : Sort.by(sortBy).descending();
+
+        Pageable pageDetails = PageRequest.of(pageNumber, pageSize, sortByAndOrder);
+        Page<Content> pageContent = contentRepository.findByContentType(type, pageDetails);
+
+        return buildContentResponse(pageContent);
+    }
+
+    // ── Shared helper: turns a Page<Content> into a ContentResponse ──────────
+    private ContentResponse buildContentResponse(Page<Content> pageContent) {
+        List<ContentDTO> contentDTOs = pageContent.getContent().stream()
                 .map(content -> {
                     ContentDTO dto = modelMapper.map(content, ContentDTO.class);
-                    // Inject the Holy Grail safe URLs
                     dto.setThumbnailUrl(constructImageUrl(content.getThumbnailUrl()));
                     dto.setBannerUrl(constructImageUrl(content.getBannerUrl()));
                     return dto;
                 })
                 .toList();
 
-        // 4. Package it all into the Response wrapper
         ContentResponse contentResponse = new ContentResponse();
         contentResponse.setContent(contentDTOs);
         contentResponse.setPageNumber(pageContent.getNumber());
@@ -81,7 +92,6 @@ public class ContentServiceImpl implements ContentService {
         contentResponse.setTotalElements(pageContent.getTotalElements());
         contentResponse.setTotalPages(pageContent.getTotalPages());
         contentResponse.setLastPage(pageContent.isLast());
-
         return contentResponse;
     }
 
