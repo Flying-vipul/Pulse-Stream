@@ -1,4 +1,4 @@
-package com.ecommerce.project.config;
+package com.netflix.streaming.platform.config;
 
 import com.cloudinary.Cloudinary;
 import org.springframework.beans.factory.annotation.Value;
