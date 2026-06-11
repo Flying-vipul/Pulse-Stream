@@ -1,5 +1,7 @@
 package com.netflix.streaming.platform.service;
 
+import com.netflix.streaming.platform.model.PlanTier;
+import com.netflix.streaming.platform.model.Role;
 import com.netflix.streaming.platform.model.User;
 import com.netflix.streaming.platform.repositories.UserRepository;
 import com.netflix.streaming.platform.security.jwt.JwtUtils;
@@ -68,9 +70,10 @@ public class AuthServiceImpl implements AuthService {
         return new UserInfoResponse(
                 userDetails.getId(),
                 jwtToken,
+                userDetails.getName(),
                 userDetails.getUsername(),
                 user.getPlanTier().name(),
-                constructAvatarUrl(user.getAvatarUrl())
+                user.getRole().name()
         );
     }
 
@@ -80,11 +83,13 @@ public class AuthServiceImpl implements AuthService {
             throw new RuntimeException("Error: Email is already in use by another account!");
         }
 
-        User user = new User(
-                signupRequest.getEmail(),
-                encoder.encode(signupRequest.getPassword()),
-                signupRequest.getPlanTier()
-        );
+        // 🛡️ THE FIX: Ignore the frontend's plan request. Hardcode to NONE.
+        User user = new User();
+        user.setName(signupRequest.getName()); // Make sure 'name' is in your SignupRequest DTO!
+        user.setEmail(signupRequest.getEmail());
+        user.setPassword(encoder.encode(signupRequest.getPassword()));
+        user.setPlanTier(PlanTier.NONE); // Force free tier
+        user.setRole(Role.ROLE_USER);
 
         userRepository.save(user);
 
@@ -101,15 +106,17 @@ public class AuthServiceImpl implements AuthService {
     @Override
     public UserInfoResponse getUserDetails(Authentication authentication) {
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+        assert userDetails != null;
         User userRecord = userRepository.findByEmail(userDetails.getUsername())
                 .orElseThrow(() -> new RuntimeException("User not found"));
 
         return new UserInfoResponse(
                 userDetails.getId(),
                 null,
+                userDetails.getName(),
                 userDetails.getUsername(),
                 userRecord.getPlanTier().name(),
-                constructAvatarUrl(userRecord.getAvatarUrl())
+                userRecord.getRole().name()
         );
     }
 
@@ -120,16 +127,17 @@ public class AuthServiceImpl implements AuthService {
 
         try {
             String uploadedFileName = fileService.uploadImage("avatars", image);
-            user.setAvatarUrl(uploadedFileName);
             userRepository.save(user);
 
             UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
+            assert userDetails != null;
             return new UserInfoResponse(
                     userDetails.getId(),
                     null,
+                    userDetails.getName(),
                     userDetails.getUsername(),
                     user.getPlanTier().name(),
-                    constructAvatarUrl(uploadedFileName)
+                    user.getRole().name()
             );
         } catch (Exception e) {
             throw new RuntimeException("Avatar upload failed", e);
@@ -168,7 +176,9 @@ public class AuthServiceImpl implements AuthService {
         // Generate a true, unguessable 6-digit number
         int otpNum = 100000 + secureRandom.nextInt(900000);
         String generatedOtp = String.valueOf(otpNum);
-
+        System.out.println("\n========================================");
+        System.out.println("🚨 DEV MODE - OTP FOR " + email + " IS: " + generatedOtp);
+        System.out.println("========================================\n");
         // Arm the Ticking Time Bomb (5 Minutes)
         user.setOtp(generatedOtp);
         user.setOtpExpiry(LocalDateTime.now().plusMinutes(5));
@@ -226,5 +236,42 @@ public class AuthServiceImpl implements AuthService {
             userRepository.save(user);
             throw new RuntimeException("Invalid OTP. You have " + (3 - currentAttempts) + " attempt(s) left.");
         }
+    }
+
+    // ==========================================
+    // FORGOT PASSWORD FEATURE
+    // ==========================================
+
+    @Transactional
+    @Override
+    public MessageResponse triggerForgotPassword(String email) {
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(() -> new RuntimeException("If that email exists, a reset code was sent.")); // Vague error for security!
+
+        // Reuse your secure OTP generator!
+        String generatedOtp = generateAndSetOtp(user.getEmail());
+
+        // Send the email (assuming your EmailService has a generic message method, or just use sendOtpEmail)
+        emailService.sendOtpEmail(user.getEmail(), generatedOtp);
+
+        return new MessageResponse("Password reset code sent to your email.");
+    }
+
+    @Transactional
+    @Override
+    public MessageResponse resetPassword(String email, String otp, String newPassword) {
+        // 1. We reuse your existing verifyOtp logic!
+        // It already handles expiry, 3-strike lockouts, and sets isVerified = true.
+        boolean isOtpValid = verifyOtp(email, otp);
+
+        if (isOtpValid) {
+            // 2. If the OTP was correct, find the user and update the password
+            User user = userRepository.findByEmail(email).get();
+            user.setPassword(encoder.encode(newPassword));
+            userRepository.save(user);
+            return new MessageResponse("Password successfully reset! You can now log in.");
+        }
+
+        throw new RuntimeException("Failed to reset password.");
     }
 }
