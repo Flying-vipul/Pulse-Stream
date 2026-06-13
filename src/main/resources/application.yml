@@ -2,7 +2,7 @@ spring:
   datasource:
     url: jdbc:postgresql://localhost:5433/netflix_clone_db
     username: postgres
-    password: netflix123 # Change this!
+    password: mai nhi batua gaa! 
     driver-class-name: org.postgresql.Driver
 
   jpa:
