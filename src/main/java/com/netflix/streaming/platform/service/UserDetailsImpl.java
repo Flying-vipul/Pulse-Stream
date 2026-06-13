@@ -8,6 +8,7 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
+import java.io.Serial;
 import java.time.LocalDateTime;
 import java.util.*;
 
@@ -15,9 +16,11 @@ import java.util.*;
 @Data
 public class UserDetailsImpl implements UserDetails {
 
+    @Serial
     private static final long serialVersionUID = 1L;
 
     private Long id;
+    private String name;
     private String email;
 
     @JsonIgnore
@@ -29,10 +32,11 @@ public class UserDetailsImpl implements UserDetails {
     private boolean isVerified;
     private LocalDateTime accountLockedUntil;
 
-    public UserDetailsImpl(Long id, String email, String password,
+    public UserDetailsImpl(Long id,String name, String email, String password,
                            Collection<? extends GrantedAuthority> authorities,
                            boolean isVerified, LocalDateTime accountLockedUntil) {
         this.id = id;
+        this.name=name;
         this.email = email;
         this.password = password;
         this.authorities = authorities;
@@ -41,14 +45,17 @@ public class UserDetailsImpl implements UserDetails {
     }
 
     public static UserDetailsImpl build(User user) {
-        // FIXED: Used .name() to extract the text from the Enum safely!
-        GrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + user.getPlanTier().name());
+
+        // ✅ FIXED: We are pulling getRole() instead of getPlanTier()!
+        // And since your enum is already "ROLE_ADMIN", we just call .name()
+        GrantedAuthority authority = new SimpleGrantedAuthority(user.getRole().name());
 
         return new UserDetailsImpl(
                 user.getId(),
+                user.getName(),
                 user.getEmail(),
                 user.getPassword(),
-                Collections.singletonList(authority), // Singleton list because one user has one plan
+                Collections.singletonList(authority),
                 user.isVerified(),
                 user.getAccountLockedUntil()
         );
@@ -70,6 +77,8 @@ public class UserDetailsImpl implements UserDetails {
         return email;
     }
 
+
+
     @Override
     public boolean isAccountNonExpired() {
         return true;
@@ -86,11 +95,7 @@ public class UserDetailsImpl implements UserDetails {
         return true;
     }
 
-    @Override
-    public boolean isEnabled() {
-        // This blocks login if they haven't verified their email yet!
-        return isVerified;
-    }
+
 
     @Override
     public boolean equals(Object o) {
