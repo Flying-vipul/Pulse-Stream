@@ -126,11 +126,12 @@ public class ContentServiceImpl implements ContentService {
             // Define where the HLS chunks should go (e.g., /videos/movie_1/)
             String hlsOutputDirectory = "C:/Users/Vipul/Videos/PulseStream/movie_" + savedContent.getId();
 
+            String webUrl = "/videos/movie_" + savedContent.getId() + "/master.m3u8";
             // Trigger FFmpeg
             videoProcessingService.generateHlsStream(tempMp4Path, hlsOutputDirectory);
 
             // Update the database with the .m3u8 master playlist link!
-            savedContent.setVideoUrl(hlsOutputDirectory + "/master.m3u8");
+            savedContent.setVideoUrl(webUrl);
             savedContent = contentRepository.save(savedContent);
         }
 
