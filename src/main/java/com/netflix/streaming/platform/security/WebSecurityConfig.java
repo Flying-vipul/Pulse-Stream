@@ -81,12 +81,12 @@ public class WebSecurityConfig {
                                 .requestMatchers("/videos/**", "/images/**", "/avatars/**", "/streams/**").permitAll()
 
                                 // 3. AUTH & CONTENT APIS
-                                .requestMatchers("/api/auth/**", "/api/content/public/**").permitAll()
+                                .requestMatchers("/api/auth/**","/api/content/public/**").permitAll()
 
-                                // 4. PROTECTED ROUTES
+                                // 4. PROTECTED ADMIN ROUTES
                                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
-                                // 5. DEFAULT
+                                // 6. DEFAULT — everything else needs a valid JWT
                                 .anyRequest().authenticated()
                 );
 
