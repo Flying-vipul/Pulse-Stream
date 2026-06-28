@@ -11,16 +11,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.util.Map;
 
-
-import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
-
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
-import java.util.UUID;
-
 @Service
 public class FileServiceImpl implements FileService {
 
@@ -32,8 +22,10 @@ public class FileServiceImpl implements FileService {
     @Override
     public String uploadVideoLocally(String directoryName, MultipartFile file) throws IOException {
 
-        // 1. Define the base path for your local Windows storage
-        String basePath = "C:/Users/Vipul/Videos/PulseStream/" + directoryName;
+        // ✅ OS-AGNOSTIC: Works on Windows (local) AND Linux (Render)
+        //    Windows → C:\Users\Vipul\AppData\Local\Temp\PulseStream\temp_videos
+        //    Linux   → /tmp/PulseStream/temp_videos
+        String basePath = System.getProperty("java.io.tmpdir") + "/PulseStream/" + directoryName;
         java.nio.file.Path storageDirectory = java.nio.file.Paths.get(basePath);
 
         // 2. Create the directory if it doesn't exist yet
