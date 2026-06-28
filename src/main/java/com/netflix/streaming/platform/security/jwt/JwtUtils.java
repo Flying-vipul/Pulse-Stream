@@ -38,6 +38,17 @@ public class JwtUtils {
         return null;
     }
 
+    // 2.5 GENERATE TOKEN FROM RAW EMAIL (For Google OAuth2 Users)
+    public String generateTokenFromEmail(String email) {
+        return Jwts.builder()
+                .subject(email)
+                .claim("role", "ROLE_USER") // <--- Default role for new Google sign-ins
+                .issuedAt(new Date())
+                .expiration(new Date((new Date().getTime() + jwtExpirationMs)))
+                .signWith(key())
+                .compact();
+    }
+
     // 2. GENERATE TOKEN (Baking the Role into the VIP Pass!)
     public String generateJwtToken(UserDetails userDetails) {
         String email = userDetails.getUsername();
