@@ -7,7 +7,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
-import org.jspecify.annotations.Nullable;
+
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
