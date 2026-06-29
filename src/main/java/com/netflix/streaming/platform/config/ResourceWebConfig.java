@@ -19,7 +19,7 @@ public class ResourceWebConfig implements WebMvcConfigurer {
     public void addCorsMappings(CorsRegistry registry) {
         // 🚨 CHANGED: Match the CORS mapping to the new path
         registry.addMapping("/videos/**")
-                .allowedOrigins("http://localhost:5173") // More secure: explicitly allow your React port
+                .allowedOrigins("http://localhost:5173", "https://thepulsestream.netlify.app") // More secure: explicitly allow your React port
                 .allowedMethods("GET", "OPTIONS");
     }
 }
