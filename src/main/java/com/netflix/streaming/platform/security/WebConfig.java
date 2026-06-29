@@ -18,7 +18,7 @@ public class WebConfig implements WebMvcConfigurer {
                 .allowedOrigins(
                         "http://localhost:5173", // React/Vite default
                         "http://localhost:3000", // Create React App default
-                        "https://pulsestream.netlify.app", // Your future production URL
+                        "https://thepulsestream.netlify.app", // Your future production URL
                         frontEndURL
                 )
                 .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
