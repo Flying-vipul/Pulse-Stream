@@ -56,14 +56,14 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
 
         // ── Find or create the user in PostgreSQL ─────────────────────────────
         User user = userRepository.findByEmail(email).orElseGet(() -> {
-            log.info("🆕 New Google user — creating account for: {}", email);
+            log.info(" New Google user — creating account for: {}", email);
             User newUser = new User(name, email, UUID.randomUUID().toString()); // random unusable password
             newUser.setVerified(true); // Google already verified the email
             newUser.setRole(Role.ROLE_USER);
             return userRepository.save(newUser);
         });
 
-        log.info("✅ Google OAuth2 login for user id={} email={}", user.getId(), email);
+        log.info(" Google OAuth2 login for user id={} email={}", user.getId(), email);
 
         // ── Generate JWT with full user info as claims ────────────────────────
         SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
