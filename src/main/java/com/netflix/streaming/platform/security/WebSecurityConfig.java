@@ -21,8 +21,6 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityCustomizer; // 🚨 Add this import
-import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 
 import java.util.List;
 
@@ -36,6 +34,9 @@ public class WebSecurityConfig {
     @Autowired
     private AuthEntryPointJwt unauthorizedHandler;
 
+    //  1. INJECT THE GOOGLE OAUTH SUCCESS HANDLER HERE
+    @Autowired
+    private OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
 
     @Bean
     public AuthTokenFilter authenticationJwtTokenFilter() {
@@ -59,9 +60,6 @@ public class WebSecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-
-
-
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
@@ -80,14 +78,18 @@ public class WebSecurityConfig {
                                 // 2. THE VIDEO & MEDIA GATES (These MUST be open for HLS streaming)
                                 .requestMatchers("/videos/**", "/images/**", "/avatars/**", "/streams/**").permitAll()
 
-                                // 3. AUTH & CONTENT APIS
-                                .requestMatchers("/api/auth/**","/api/content/public/**").permitAll()
+                                // 3. AUTH & CONTENT APIS ( 2. ADDED OAUTH2 AND LOGIN ROUTES HERE)
+                                .requestMatchers("/api/auth/**","/api/content/public/**", "/oauth2/**", "/login/**").permitAll()
 
                                 // 4. PROTECTED ADMIN ROUTES
                                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
                                 // 6. DEFAULT — everything else needs a valid JWT
                                 .anyRequest().authenticated()
+                )
+                //  3. THE MAGIC OAUTH2 BLOCK: Catch the Google login and fire the custom JWT handler
+                .oauth2Login(oauth2 -> oauth2
+                        .successHandler(oAuth2LoginSuccessHandler)
                 );
 
         http.authenticationProvider(authenticationProvider());
@@ -99,7 +101,7 @@ public class WebSecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
+        configuration.setAllowedOrigins(List.of("http://localhost:5173", "https://thepulsestream.netlify.app"));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
         configuration.setAllowCredentials(true);
@@ -108,6 +110,4 @@ public class WebSecurityConfig {
         source.registerCorsConfiguration("/**", configuration);
         return source;
     }
-
-    // 🛡️ Note: The duplicate initData Data Seeder bean has been completely removed.
 }
