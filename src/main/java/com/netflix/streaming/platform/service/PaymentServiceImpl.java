@@ -21,7 +21,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
-@Transactional // 🛡️ If any step fails (like the DB goes down), the whole transaction rolls back!
+@Transactional // If any step fails (like the DB goes down), the whole transaction rolls back!
 public class PaymentServiceImpl implements PaymentService {
 
     @Autowired
@@ -129,7 +129,7 @@ public boolean verifyPaymentSignature(PaymentVerificationDTO dto) {
             payment.setPgStatus("SUCCESS");
             payment.setPaymentMethod("RAZORPAY");
 
-            // 🛡️ THE CRITICAL FIX: Attach the User to prevent the 500 DB Crash!
+            //  THE CRITICAL FIX: Attach the User to prevent the 500 DB Crash!
             payment.setUser(loggedInUser);
 
             paymentRepository.save(payment);
@@ -139,7 +139,7 @@ public boolean verifyPaymentSignature(PaymentVerificationDTO dto) {
             userRepository.save(loggedInUser);
 
             // 7. FIRE THE EMOJI HYPE EMAIL
-            String emailSubject = "🎬 Welcome to Pulse Stream " + dto.getPlanTier().toUpperCase() + "! 🍿";
+            String emailSubject = "Welcome to Pulse Stream " + dto.getPlanTier().toUpperCase() + "!";
 
             String emailBody = "Hey " + loggedInUser.getEmail() + " 👋,\n\n" +
                     "Boom! 💥 Your payment was an absolute success! 🚀\n\n" +
@@ -164,7 +164,7 @@ public boolean verifyPaymentSignature(PaymentVerificationDTO dto) {
     // --- HELPER METHOD ---
     private int getPriceForPlan(String planTier) {
         return switch (planTier.toUpperCase()) {
-            case "NONE" -> 0;     // 🛡️ The magic fix!
+            case "NONE" -> 0;     //  The magic fix!
             case "BASIC" -> 199;
             case "STANDARD" -> 499;
             case "PREMIUM" -> 799;
