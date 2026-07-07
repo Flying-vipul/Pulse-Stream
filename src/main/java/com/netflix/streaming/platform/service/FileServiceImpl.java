@@ -22,7 +22,7 @@ public class FileServiceImpl implements FileService {
     @Override
     public String uploadVideoLocally(String directoryName, MultipartFile file) throws IOException {
 
-        // ✅ OS-AGNOSTIC: Works on Windows (local) AND Linux (Render)
+        // OS-AGNOSTIC: Works on Windows (local) AND Linux (Render)
         //    Windows → C:\Users\Vipul\AppData\Local\Temp\PulseStream\temp_videos
         //    Linux   → /tmp/PulseStream/temp_videos
         String basePath = System.getProperty("java.io.tmpdir") + "/PulseStream/" + directoryName;
@@ -50,6 +50,7 @@ public class FileServiceImpl implements FileService {
         return filePath.toAbsolutePath().toString();
     }
 
+
     @Override
     public String uploadImage(String path, MultipartFile file) throws IOException {
 
@@ -70,7 +71,7 @@ public class FileServiceImpl implements FileService {
 
             // 3. Extract and return the permanent, secure HTTPS URL
             String secureUrl = uploadResult.get("secure_url").toString();
-            logger.info("✅ Successfully uploaded image! URL: {}", secureUrl);
+            logger.info("Successfully uploaded image! URL: {}", secureUrl);
 
             return secureUrl;
 
@@ -79,6 +80,4 @@ public class FileServiceImpl implements FileService {
             throw new IOException("Failed to upload image to PulseStream CDN.", e);
         }
     }
-
-
 }
