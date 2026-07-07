@@ -46,7 +46,7 @@ public class UserDetailsImpl implements UserDetails {
 
     public static UserDetailsImpl build(User user) {
 
-        // ✅ FIXED: We are pulling getRole() instead of getPlanTier()!
+        //  FIXED: We are pulling getRole() instead of getPlanTier()!
         // And since your enum is already "ROLE_ADMIN", we just call .name()
         GrantedAuthority authority = new SimpleGrantedAuthority(user.getRole().name());
 
