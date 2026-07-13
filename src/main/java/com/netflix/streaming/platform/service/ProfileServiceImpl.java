@@ -15,7 +15,7 @@ import java.util.List;
 @Service
 public class ProfileServiceImpl implements ProfileService {
 
-    // 🛡️ ONLY Repositories get @Autowired
+    //  ONLY Repositories get @Autowired
     @Autowired
     private ProfileRepository profileRepository;
 
@@ -42,7 +42,7 @@ public class ProfileServiceImpl implements ProfileService {
 
         List<Profile> profiles = profileRepository.findByUser(user);
 
-        // 🛡️ The variable is declared locally inside the method here!
+        // ️ The variable is declared locally inside the method here!
         List<ProfileDTO> profileDTOList = profiles.stream()
                 .map(profile -> new ProfileDTO(profile.getId(), profile.getProfileName()))
                 .toList();
