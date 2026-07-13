@@ -37,13 +37,12 @@ public class VideoProcessingService {
             throw new RuntimeException("FFmpeg processing failed with exit code: " + exitCode);
         }
 
-        System.out.println("🎬 HLS Conversion Complete! Master Playlist: " + outputDirectory + "/master.m3u8");
+        System.out.println("HLS Conversion Complete! Master Playlist: " + outputDirectory + "/master.m3u8");
     }
 
     private static Process getProcess(String inputFilePath, String outputDirectory) throws IOException {
 
-        // ─────────────────────────────────────────────────────────────────────────
-        // 🛡️ WINDOWS SAFE: Why this layout is critical
+        //  WINDOWS SAFE: Why this layout is critical
         //
         // On Windows, when you build a command string like:
         //   outputDirectory + "/stream_%v_segment_%03d.ts"
@@ -58,8 +57,7 @@ public class VideoProcessingService {
         // the path using + operator at the call site.
         //
         // We pre-build the three path strings here, then each becomes its
-        // own array slot → ffmpeg receives them exactly as written. ✅
-        // ─────────────────────────────────────────────────────────────────────────
+        // own array slot → ffmpeg receives them exactly as written.
 
         // Each of these is a standalone String — no shell expansion risk.
         String segmentPattern  = outputDirectory + "/stream_%v_segment_%03d.ts";
@@ -104,7 +102,7 @@ public class VideoProcessingService {
                 "-hls_playlist_type", "vod",
                 "-hls_flags",         "independent_segments",
 
-                // 🛡️ KEY: -hls_segment_filename as its own argv slot.
+                //  KEY: -hls_segment_filename as its own argv slot.
                 // ProcessBuilder sends this string raw to ffmpeg — %03d/%v are safe.
                 "-hls_segment_filename", segmentPattern,
 
