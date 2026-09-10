@@ -11,6 +11,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
@@ -28,11 +29,13 @@ public class AuthTokenFilter extends OncePerRequestFilter {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthTokenFilter.class);
 
-    // 🛡️ BYPASS: Skip JWT processing entirely for public media paths.
-    // This is the critical fix for the %03d HLS segment 401 bug.
-    // Spring Security's pattern matcher can choke on URL-encoded special chars
-    // in segment filenames (e.g., stream_%03d.ts), causing permitAll() to be bypassed.
-    // By returning true here, those requests NEVER reach the auth logic.
+    /**
+     * Bypass JWT processing for public media paths.
+     * Spring Security pattern matchers can choke on URL-encoded special chars
+     * in HLS segment filenames (e.g., stream_%03d.ts), causing permitAll() to
+     * be bypassed. Returning true here prevents those requests from ever reaching
+     * the auth logic.
+     */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
         String path = request.getRequestURI();
@@ -46,28 +49,37 @@ public class AuthTokenFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request,
                                     HttpServletResponse response,
                                     FilterChain filterChain) throws ServletException, IOException {
-        logger.debug("AuthTokenFilter called for URI: {}", request.getRequestURI());
+
+        logger.debug("AuthTokenFilter processing URI: {}", request.getRequestURI());
 
         try {
-            // Extracts strictly from the Header
             String jwt = jwtUtils.getJwtFromHeader(request);
 
             if (jwt != null && jwtUtils.validateJwtToken(jwt)) {
                 String email = jwtUtils.getEmailByJwtToken(jwt);
 
-                // We pass the email to load the user (which Spring Security still calls 'Username')
                 UserDetails userDetails = userDetailsService.loadUserByUsername(email);
 
-                UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
-                        userDetails, null, userDetails.getAuthorities()
-                );
-
+                UsernamePasswordAuthenticationToken authentication =
+                        new UsernamePasswordAuthenticationToken(
+                                userDetails, null, userDetails.getAuthorities()
+                        );
                 authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
                 SecurityContextHolder.getContext().setAuthentication(authentication);
-                logger.debug("Authorities from JWT: {}", userDetails.getAuthorities());
+                logger.debug("Authentication set for user: [email hidden], authorities: {}",
+                        userDetails.getAuthorities());
             }
+        } catch (UsernameNotFoundException e) {
+            // Token contained an email that no longer exists in the DB.
+            // Log at WARN but do NOT set authentication — the request proceeds
+            // as anonymous and Spring Security will enforce authorization rules.
+            logger.warn("JWT referenced unknown user — proceeding as anonymous");
         } catch (Exception e) {
-            logger.error("Cannot set user authentication: {}", e.getMessage());
+            // Catch-all for any unexpected parsing/loading failure.
+            // SECURITY: Do not log the exception message; it may contain token fragments.
+            logger.warn("Failed to process JWT — proceeding as anonymous. Cause type: {}",
+                    e.getClass().getSimpleName());
         }
 
         filterChain.doFilter(request, response);
