@@ -13,6 +13,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.security.core.Authentication;
 
 import java.util.*;
 
@@ -24,7 +25,6 @@ public class ContentController {
     @Autowired private ContentRepository contentRepository;
     @Autowired private UserRepository userRepository;
 
-    // ── ALL CONTENT (paginated) ───────────────────────────────────────────────
     @GetMapping("/public/all")
     public ResponseEntity<ContentResponse> getAllContent(
             @RequestParam(defaultValue = "0") Integer pageNumber,
@@ -34,7 +34,6 @@ public class ContentController {
         return ResponseEntity.ok(contentService.getAllContent(pageNumber, pageSize, sortBy, sortOrder));
     }
 
-    // ── BY TYPE: MOVIE or SERIES (paginated) ─────────────────────────────────
     @GetMapping("/public/by-type")
     public ResponseEntity<ContentResponse> getByType(
             @RequestParam String type,
@@ -47,77 +46,29 @@ public class ContentController {
         return ResponseEntity.ok(contentService.getContentByType(mediaType, pageNumber, pageSize, sortBy, sortOrder));
     }
 
-    // ══════════════════════════════════════════════════════════════════════════
-    // WATCHLIST — persisted to the `user_watchlist` DB table via @ElementCollection
-    // on the User entity. Data survives server restarts.
-    // ══════════════════════════════════════════════════════════════════════════
-
-    private User getUser(Long userId) {
-        return userRepository.findById(userId)
-                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+    @GetMapping("/v1/me/watchlist")
+    public ResponseEntity<List<ContentDTO>> getWatchlist(Authentication authentication) {
+        return ResponseEntity.ok(contentService.getWatchlist(authentication));
     }
 
-    private ContentDTO toDTO(Content c) {
-        ContentDTO dto = new ContentDTO();
-        dto.setId(c.getId());
-        dto.setTitle(c.getTitle());
-        dto.setDescription(c.getDescription());
-        dto.setReleaseYear(c.getReleaseYear());
-        dto.setThumbnailUrl(c.getThumbnailUrl());
-        dto.setBannerUrl(c.getBannerUrl());
-        dto.setContentType(c.getContentType());
-        dto.setDurationMinutes(c.getDurationMinutes());
-        return dto;
-    }
-
-    // GET /api/content/watchlist/{userId}
-    @GetMapping("/watchlist/{userId}")
-    @Transactional(readOnly = true)
-    public ResponseEntity<List<ContentDTO>> getWatchlist(@PathVariable Long userId) {
-        User user = getUser(userId);
-        Set<Long> ids = user.getWatchlistContentIds();
-        if (ids == null || ids.isEmpty()) return ResponseEntity.ok(Collections.emptyList());
-
-        List<Content> items = contentRepository.findByIdIn(ids);
-        List<ContentDTO> dtos = items.stream().map(this::toDTO).toList();
-        return ResponseEntity.ok(dtos);
-    }
-
-    // POST /api/content/watchlist/{userId}/add/{contentId}
-    @PostMapping("/watchlist/{userId}/add/{contentId}")
-    @Transactional
+    @PostMapping("/v1/me/watchlist/{contentId}")
     public ResponseEntity<Map<String, Object>> addToWatchlist(
-            @PathVariable Long userId,
+            Authentication authentication,
             @PathVariable Long contentId) {
-
-        User user = getUser(userId);
-        user.getWatchlistContentIds().add(contentId);
-        userRepository.save(user);
-        return ResponseEntity.ok(Map.of("inWatchlist", true, "contentId", contentId));
+        return ResponseEntity.ok(contentService.addToWatchlist(authentication, contentId));
     }
 
-    // DELETE /api/content/watchlist/{userId}/remove/{contentId}
-    @DeleteMapping("/watchlist/{userId}/remove/{contentId}")
-    @Transactional
+    @DeleteMapping("/v1/me/watchlist/{contentId}")
     public ResponseEntity<Map<String, Object>> removeFromWatchlist(
-            @PathVariable Long userId,
+            Authentication authentication,
             @PathVariable Long contentId) {
-
-        User user = getUser(userId);
-        user.getWatchlistContentIds().remove(contentId);
-        userRepository.save(user);
-        return ResponseEntity.ok(Map.of("inWatchlist", false, "contentId", contentId));
+        return ResponseEntity.ok(contentService.removeFromWatchlist(authentication, contentId));
     }
 
-    // GET /api/content/watchlist/{userId}/check/{contentId}
-    @GetMapping("/watchlist/{userId}/check/{contentId}")
-    @Transactional(readOnly = true)
+    @GetMapping("/v1/me/watchlist/check/{contentId}")
     public ResponseEntity<Map<String, Object>> checkWatchlist(
-            @PathVariable Long userId,
+            Authentication authentication,
             @PathVariable Long contentId) {
-
-        User user = getUser(userId);
-        boolean inList = user.getWatchlistContentIds().contains(contentId);
-        return ResponseEntity.ok(Map.of("inWatchlist", inList, "contentId", contentId));
+        return ResponseEntity.ok(contentService.checkWatchlist(authentication, contentId));
     }
 }
