@@ -34,4 +34,9 @@ build/
 
 ### Mac/Windows ###
 .DS_Store
-Thumbs.dbsrc/main/resources/application.yml
+Thumbs.db
+
+### CUSTOM SECRETS (DO NOT REMOVE) ###
+.env
+src/main/resources/application.yml
+*.log
