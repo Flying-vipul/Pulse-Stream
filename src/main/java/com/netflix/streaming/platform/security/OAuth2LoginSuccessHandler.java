@@ -4,9 +4,6 @@ import com.netflix.streaming.platform.model.Role;
 import com.netflix.streaming.platform.model.User;
 import com.netflix.streaming.platform.repositories.UserRepository;
 import com.netflix.streaming.platform.security.jwt.JwtUtils;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.io.Decoders;
-import io.jsonwebtoken.security.Keys;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -18,11 +15,23 @@ import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.security.web.authentication.SimpleUrlAuthenticationSuccessHandler;
 import org.springframework.stereotype.Component;
 
-import javax.crypto.SecretKey;
 import java.io.IOException;
-import java.util.Date;
 import java.util.UUID;
 
+/**
+ * Handles a successful Google OAuth2 login.
+ *
+ * <p>Security notes:
+ * <ul>
+ *   <li>JWT is built by {@link JwtUtils#generateJwtTokenFromUser(User)}, which reads the role
+ *       from the database record — never from OAuth2 claims. This prevents role escalation/downgrade.</li>
+ *   <li>An existing user''s role is NEVER overwritten on OAuth login — the DB value is preserved.</li>
+ *   <li>The JWT is appended to the redirect URL as a query parameter. This approach carries known risks
+ *       (browser history, Referer headers, proxy logs). A safer code-exchange flow will be implemented
+ *       when the frontend is updated. Until then, the token is not logged anywhere.</li>
+ *   <li>JWT claims contain only subject (email) and role — no userId, name, or other PII.</li>
+ * </ul>
+ */
 @Component
 public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHandler {
 
@@ -30,12 +39,6 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
 
     private final JwtUtils jwtUtils;
     private final UserRepository userRepository;
-
-    @Value("${app.jwtSecret}")
-    private String jwtSecret;
-
-    @Value("${app.jwtExpirationMs}")
-    private int jwtExpirationMs;
 
     @Value("${app.frontend-url}")
     private String frontendUrl;
@@ -54,31 +57,34 @@ public class OAuth2LoginSuccessHandler extends SimpleUrlAuthenticationSuccessHan
         String rawName = oAuth2User.getAttribute("name");
         final String name = (rawName != null && !rawName.isBlank()) ? rawName : email;
 
-        // ── Find or create the user in PostgreSQL ─────────────────────────────
+        if (email == null || email.isBlank()) {
+            log.error("OAuth2 login failed: no email attribute returned from provider");
+            response.sendError(HttpServletResponse.SC_BAD_REQUEST, "Email not provided by OAuth2 provider");
+            return;
+        }
+
+        // Find or create the user. CRITICAL: if the user already exists, their role is
+        // NEVER changed — the existing DB value is preserved. This prevents a scenario
+        // where an admin loses ROLE_ADMIN after logging in via Google.
         User user = userRepository.findByEmail(email).orElseGet(() -> {
-            log.info(" New Google user — creating account for: {}", email);
+            log.info("New Google OAuth2 user — creating account for email hash: {}",
+                    Integer.toHexString(email.hashCode()));
             User newUser = new User(name, email, UUID.randomUUID().toString()); // random unusable password
-            newUser.setVerified(true); // Google already verified the email
+            newUser.setVerified(true);   // Google already verified the email
             newUser.setRole(Role.ROLE_USER);
             return userRepository.save(newUser);
         });
 
-        log.info(" Google OAuth2 login for user id={} email={}", user.getId(), email);
+        log.info("Google OAuth2 login success for user id={}", user.getId());
 
-        // ── Generate JWT with full user info as claims ────────────────────────
-        SecretKey key = Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
-        String token = Jwts.builder()
-                .subject(email)
-                .claim("userId", user.getId())
-                .claim("name",   user.getName())
-                .claim("email",  email)
-                .claim("role",   user.getRole().name())
-                .issuedAt(new Date())
-                .expiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
-                .signWith(key)
-                .compact();
+        // Delegate token generation to JwtUtils — single source of truth for signing logic.
+        // Role is read from user.getRole() (DB), not from any OAuth2 claim.
+        // SECURITY: Token is NOT logged here.
+        String token = jwtUtils.generateJwtTokenFromUser(user);
 
-        // Redirect to React app on port 5173 or deployed frontend
+        // TODO (security): Replace this with a short-lived one-time code exchange when
+        // the frontend is updated. Current approach appends JWT to the redirect URL,
+        // which exposes it in browser history and server access logs.
         String targetUrl = frontendUrl + "/oauth2/redirect?token=" + token;
         getRedirectStrategy().sendRedirect(request, response, targetUrl);
     }
