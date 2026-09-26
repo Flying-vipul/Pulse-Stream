@@ -14,7 +14,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/auth")
@@ -67,16 +66,6 @@ public class AuthController {
         return ResponseEntity.ok(new MessageResponse("You've been successfully signed out of PulseStream."));
     }
 
-    @PutMapping("/profile/avatar")
-    public ResponseEntity<?> uploadAvatar(@RequestParam("image") MultipartFile image) {
-        try {
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            UserInfoResponse response = authService.uploadAvatar(image, authentication);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.internalServerError().body(new MessageResponse(e.getMessage()));
-        }
-    }
 
     // You can just accept the email as a query parameter for the trigger
     @PostMapping("/forgot-password/trigger")
