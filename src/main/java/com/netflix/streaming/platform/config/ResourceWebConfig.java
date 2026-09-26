@@ -10,14 +10,12 @@ public class ResourceWebConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        // 🚨 CHANGED: Match what React is asking for (/videos/**)
         registry.addResourceHandler("/videos/**")
                 .addResourceLocations("file:///C:/Users/Vipul/Videos/PulseStream/");
     }
 
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        // 🚨 CHANGED: Match the CORS mapping to the new path
         registry.addMapping("/videos/**")
                 .allowedOrigins("http://localhost:5173", "https://thepulsestream.netlify.app") // More secure: explicitly allow your React port
                 .allowedMethods("GET", "OPTIONS");
