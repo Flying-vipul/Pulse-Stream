@@ -9,6 +9,7 @@ import com.netflix.streaming.platform.service.ContentService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -16,6 +17,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/content")
+@PreAuthorize("hasRole('ADMIN')")
 public class AdminContentController {
 
     @Autowired
@@ -27,11 +29,7 @@ public class AdminContentController {
     @Autowired
     private UserRepository userRepository;
 
-    // ──────────────────────────────────────────────────────────────────────────
-    // 📊 ADMIN STATS — Real numbers from the database, not hardcoded fakes
-    // GET /api/admin/content/stats
-    // Returns: { totalContent, activeUsers, premiumSubs }
-    // ──────────────────────────────────────────────────────────────────────────
+
     @GetMapping("/stats")
     public ResponseEntity<Map<String, Long>> getAdminStats() {
         long totalContent  = contentRepository.count();
@@ -60,11 +58,8 @@ public class AdminContentController {
         }
     }
 
-    // ==========================================
-    // 📺 WEB SERIES UPLOAD PIPELINE
-    // ==========================================
 
-    // STEP 1: Create the Series (Metadata & Images only, NO video yet)
+
     @PostMapping(value = "/series", consumes = {"multipart/form-data"})
     public ResponseEntity<?> createSeries(
             @RequestPart("seriesDetails") ContentDTO contentDTO,
@@ -79,7 +74,6 @@ public class AdminContentController {
         }
     }
 
-    // STEP 2: Add a Season to the Series
     @PostMapping("/series/{seriesId}/seasons")
     public ResponseEntity<?> addSeason(
             @PathVariable Long seriesId,
@@ -94,7 +88,6 @@ public class AdminContentController {
         }
     }
 
-    // STEP 3: Upload an Episode to a specific Season (This handles the heavy FFmpeg video upload)
     @PostMapping(value = "/seasons/{seasonId}/episodes", consumes = {"multipart/form-data"})
     public ResponseEntity<?> uploadEpisode(
             @PathVariable Long seasonId,
@@ -108,4 +101,4 @@ public class AdminContentController {
             return ResponseEntity.internalServerError().body("Failed to upload episode: " + e.getMessage());
         }
     }
-}
+}
