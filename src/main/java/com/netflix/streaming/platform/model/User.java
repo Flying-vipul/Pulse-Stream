@@ -32,17 +32,12 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // 🛡️ THE FIX: This forces Spring to block the request if name is missing!
     @NotBlank(message = "Name cannot be blank")
     private String name;
 
     @Column(unique = true, nullable = false)
     private String email;
 
-    // 🛡️ FIX 2: The password field has been completely eradicated.
-    // Authentication is now 100% OTP driven.
-
-    // Defaults  NONE to protect your revenue
     @Enumerated(EnumType.STRING)
     @Column(name = "plan_tier", nullable = false)
     private PlanTier planTier = PlanTier.NONE;
@@ -57,18 +52,10 @@ public class User {
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Profile> profiles = new ArrayList<>();
 
-    // ── PERSISTENT WATCHLIST ──────────────────────────────────────────────────
-    // Stored in a join table `user_watchlist` (auto-created by Hibernate).
-    // Each row is (user_id, content_id). Survives server restarts.
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "user_watchlist", joinColumns = @JoinColumn(name = "user_id"))
     @Column(name = "content_id")
     private Set<Long> watchlistContentIds = new HashSet<>();
-
-
-    // ==========================================
-    // ADVANCED SECURITY & OTP FIELDS
-    // ==========================================
 
     @JsonIgnore
     @Column(length = 6)
@@ -94,7 +81,6 @@ public class User {
     @Column(nullable = false)
     private String password;
 
-    // Update your constructor to include the password
     public User(String name, String email, String password) {
         this.name = name;
         this.email = email;

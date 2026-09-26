@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class SignupRequest {
 
-    // 🛡️ The Correct Validation Annotation for DTOs!
+    // ️ The Correct Validation Annotation for DTOs!
     @NotBlank(message = "Name cannot be blank")
     private String name;
 
@@ -25,6 +25,6 @@ public class SignupRequest {
     @Size(min = 6, max = 40, message = "Password must be between 6 and 40 characters")
     private String password;
 
-    // 🛡️ PlanTier has been completely eradicated from this file.
+    //  PlanTier has been completely eradicated from this file.
     // The backend AuthServiceImpl will automatically force PlanTier.NONE!
 }

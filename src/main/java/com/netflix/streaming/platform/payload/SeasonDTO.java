@@ -9,5 +9,5 @@ public class SeasonDTO {
     private Integer seasonNumber;
     private String title;
     private Integer releaseYear;
-    private List<EpisodeDTO> episodes; // Flows downwards only!
+    private List<EpisodeDTO> episodes;
 }
