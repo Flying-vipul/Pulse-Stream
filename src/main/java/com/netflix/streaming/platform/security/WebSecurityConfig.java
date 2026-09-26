@@ -11,6 +11,7 @@ import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -26,6 +27,7 @@ import java.util.List;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 public class WebSecurityConfig {
 
     @Autowired
@@ -84,7 +86,7 @@ public class WebSecurityConfig {
                                 // 4. PROTECTED ADMIN ROUTES
                                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
-                                // 6. DEFAULT — everything else needs a valid JWT
+                                // 6. DEFAULT â€” everything else needs a valid JWT
                                 .anyRequest().authenticated()
                 )
                 //  3. THE MAGIC OAUTH2 BLOCK: Catch the Google login and fire the custom JWT handler
@@ -102,8 +104,8 @@ public class WebSecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of("http://localhost:5173", "https://thepulsestream.netlify.app"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")); // BUG-FIX: PATCH added
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With")); // single CORS config — CorsConfig.java deleted
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
