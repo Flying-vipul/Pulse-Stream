@@ -1,17 +1,18 @@
 package com.netflix.streaming.platform.service;
 
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSender;
+import org.springframework.mail.javamail.MimeMessageHelper;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.io.UnsupportedEncodingException;
 
 @Service
 public class EmailService {
@@ -21,13 +22,6 @@ public class EmailService {
     @Autowired
     private JavaMailSender mailSender;
 
-    @Value("${spring.mail.username}")
-    private String senderEmail;
-
-    /**
-     * @Async runs this in the background so the user doesn't wait.
-     * @Retryable tells Spring: If this fails, wait 2 seconds (2000ms), and try again up to 3 times!
-     */
     @Async
     @Retryable(
             retryFor = {Exception.class},
@@ -35,33 +29,38 @@ public class EmailService {
             backoff = @Backoff(delay = 2000)
     )
     public void sendOtpEmail(String toEmail, String otp) {
-        logger.info("Attempting to send OTP email to: {}", toEmail);
+        logger.info("Attempting to send OTP email via Brevo to: {}", toEmail);
 
         try {
-            SimpleMailMessage message = new SimpleMailMessage();
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true);
 
-            message.setFrom(senderEmail);
-            message.setTo(toEmail);
-            message.setSubject("Verify Your PulseStream Account");
-
-            message.setText("Welcome to PulseStream! 🍿\n\n"
-                    + "Your 6-digit verification code is: " + otp + "\n\n"
-                    + "This code will expire in exactly 5 minutes.\n"
-                    + "If you did not request this, please ignore this email.\n\n"
-                    + "- The PulseStream Team");
+            // THE HACK: Real email address, Fake display name!
+            helper.setFrom("noreply@zappit.online", "PulseStream");
+            
+            helper.setTo(toEmail);
+            helper.setSubject("Your PulseStream Verification Code");
+            
+            // HTML for a beautiful UI
+            String htmlContent = "<p>Welcome to PulseStream! 🍿</p>"
+                               + "<p>Your 6-digit verification code is: <strong>" + otp + "</strong></p>"
+                               + "<p>This code will expire in exactly 5 minutes.</p>"
+                               + "<p>If you did not request this, please ignore this email.</p>"
+                               + "<p>- The PulseStream Team</p>";
+            
+            helper.setText(htmlContent, true);
 
             mailSender.send(message);
-            logger.info("✅ SUCCESS: OTP email sent to: {}", toEmail);
+            logger.info(" SUCCESS: OTP email sent via Brevo to: {}", toEmail);
 
-        } catch (Exception e) {
-            // This error will trigger the @Retryable mechanism automatically!
-            logger.warn("⚠️ FAILED to send email to {}. Retrying... Error: {}", toEmail, e.getMessage());
-            throw e;
+        } catch (MessagingException | UnsupportedEncodingException e) {
+            logger.warn(" FAILED to send email to {}. Retrying... Error: {}", toEmail, e.getMessage());
+            throw new RuntimeException("Brevo SMTP failed to send email", e);
         }
     }
 
     /**
-     * 🛡️ THE FIX: General Purpose Email Sender (For Payment Receipts!)
+     * General Purpose Email Sender (For Payment Receipts!)
      */
     @Async
     @Retryable(
@@ -70,22 +69,25 @@ public class EmailService {
             backoff = @Backoff(delay = 2000)
     )
     public void sendSimpleMessage(String toEmail, String subject, String body) {
-        logger.info("Attempting to send standard email to: {}", toEmail);
+        logger.info("Attempting to send standard email via Brevo to: {}", toEmail);
 
         try {
-            SimpleMailMessage message = new SimpleMailMessage();
+            MimeMessage message = mailSender.createMimeMessage();
+            MimeMessageHelper helper = new MimeMessageHelper(message, true);
 
-            message.setFrom(senderEmail);
-            message.setTo(toEmail);
-            message.setSubject(subject);
-            message.setText(body);
+            helper.setFrom("noreply@zappit.online", "PulseStream");
+            helper.setTo(toEmail);
+            helper.setSubject(subject);
+            
+            // Replacing standard newlines with HTML breaks so receipts look good
+            helper.setText("<p>" + body.replace("\n", "<br>") + "</p>", true);
 
             mailSender.send(message);
-            logger.info("✅ SUCCESS: Standard email sent to: {}", toEmail);
+            logger.info(" SUCCESS: Standard email sent via Brevo to: {}", toEmail);
 
-        } catch (Exception e) {
-            logger.warn("⚠️ FAILED to send standard email to {}. Retrying... Error: {}", toEmail, e.getMessage());
-            throw e;
+        } catch (MessagingException | UnsupportedEncodingException e) {
+            logger.warn(" FAILED to send standard email to {}. Retrying... Error: {}", toEmail, e.getMessage());
+            throw new RuntimeException("Brevo SMTP failed to send email", e);
         }
     }
 }
