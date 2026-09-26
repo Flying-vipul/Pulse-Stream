@@ -1,5 +1,6 @@
 package com.netflix.streaming.platform.security.jwt;
 
+import com.netflix.streaming.platform.model.User;
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.MalformedJwtException;
@@ -28,44 +29,46 @@ public class JwtUtils {
     @Value("${app.jwtExpirationMs}")
     private int jwtExpirationMs;
 
-    // 1. EXTRACT JWT FROM HEADER (Cookie logic removed)
+    // 1. EXTRACT JWT FROM HEADER
+    // SECURITY: Never log the raw bearer token value.
     public String getJwtFromHeader(HttpServletRequest request) {
         String bearerToken = request.getHeader("Authorization");
-        logger.debug("Authorization Header: {} ", bearerToken);
+        logger.debug("Authorization header present: {}", bearerToken != null);
         if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
             return bearerToken.substring(7);
         }
         return null;
     }
 
-    // 2.5 GENERATE TOKEN FROM RAW EMAIL (For Google OAuth2 Users)
-    public String generateTokenFromEmail(String email) {
-        return Jwts.builder()
-                .subject(email)
-                .claim("role", "ROLE_USER") // <--- Default role for new Google sign-ins
-                .issuedAt(new Date())
-                .expiration(new Date((new Date().getTime() + jwtExpirationMs)))
-                .signWith(key())
-                .compact();
-    }
-
-    // 2. GENERATE TOKEN (Baking the Role into the VIP Pass!)
+    // 2. GENERATE TOKEN FROM UserDetails (used by login flow)
     public String generateJwtToken(UserDetails userDetails) {
         String email = userDetails.getUsername();
-
-        // Grab the first role (e.g., "ROLE_ADMIN")
+        // Role is sourced from the loaded UserDetails, which was built from the DB record.
         String role = userDetails.getAuthorities().iterator().next().getAuthority();
 
         return Jwts.builder()
                 .subject(email)
-                .claim("role", role) // <--- THIS IS THE MAGIC VIP PASS!
+                .claim("role", role)
                 .issuedAt(new Date())
-                .expiration(new Date((new Date().getTime() + jwtExpirationMs)))
+                .expiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
                 .signWith(key())
                 .compact();
     }
 
-    // 3. EXTRACT EMAIL FROM JWT
+    // 3. GENERATE TOKEN FROM User entity (used by OAuth2 success handler)
+    // Role is always read from the persisted User entity, never from OAuth2 claims.
+    // This prevents an attacker from downgrading or upgrading roles via OAuth2.
+    public String generateJwtTokenFromUser(User user) {
+        return Jwts.builder()
+                .subject(user.getEmail())
+                .claim("role", user.getRole().name())
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + jwtExpirationMs))
+                .signWith(key())
+                .compact();
+    }
+
+    // 4. EXTRACT EMAIL FROM JWT
     public String getEmailByJwtToken(String token) {
         return Jwts.parser()
                 .verifyWith((SecretKey) key())
@@ -75,12 +78,14 @@ public class JwtUtils {
                 .getSubject();
     }
 
-    // 4. GENERATING SIGNING KEY
+    // 5. SIGNING KEY (HMAC-SHA256, loaded once per token operation)
     private Key key() {
         return Keys.hmacShaKeyFor(Decoders.BASE64.decode(jwtSecret));
     }
 
-    // 5. VALIDATE JWT TOKEN
+    // 6. VALIDATE JWT TOKEN
+    // SECURITY: Log only the exception type/category, never the raw token or message
+    // which may contain sensitive fragments.
     public boolean validateJwtToken(String authToken) {
         try {
             Jwts.parser()
@@ -89,13 +94,13 @@ public class JwtUtils {
                     .parseSignedClaims(authToken);
             return true;
         } catch (MalformedJwtException e) {
-            logger.error("Invalid JWT token: {}", e.getMessage());
+            logger.warn("JWT validation failed: malformed token");
         } catch (ExpiredJwtException e) {
-            logger.error("Jwt Token gets expired: {}", e.getMessage());
+            logger.warn("JWT validation failed: token expired");
         } catch (UnsupportedJwtException e) {
-            logger.error("Jwt Token is unsupported: {}", e.getMessage());
+            logger.warn("JWT validation failed: unsupported token format");
         } catch (IllegalArgumentException e) {
-            logger.error("JWT claims string is empty: {}", e.getMessage());
+            logger.warn("JWT validation failed: empty or null token string");
         }
         return false;
     }
