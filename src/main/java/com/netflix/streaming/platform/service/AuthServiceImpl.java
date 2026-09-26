@@ -21,7 +21,6 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 import java.security.SecureRandom;
 import java.time.Duration;
@@ -32,7 +31,7 @@ public class AuthServiceImpl implements AuthService {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthServiceImpl.class);
 
-    // Cryptographically secure RNG — static so the seed entropy is not wasted on every call
+    // Cryptographically secure RNG Ã¢â‚¬â€ static so the seed entropy is not wasted on every call
     private static final SecureRandom secureRandom = new SecureRandom();
 
     @Autowired private UserRepository userRepository;
@@ -40,10 +39,6 @@ public class AuthServiceImpl implements AuthService {
     @Autowired private JwtUtils jwtUtils;
     @Autowired private PasswordEncoder encoder;
     @Autowired private EmailService emailService;
-    @Autowired private FileService fileService;
-
-    @Value("${image.base.url:http://localhost:8080/images/}")
-    private String imageBaseUrl;
 
     // =========================================================================
     // LOGIN
@@ -67,7 +62,7 @@ public class AuthServiceImpl implements AuthService {
         UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
 
         if (userDetails == null) {
-            throw new APIException("Authentication failed — could not load user details.");
+            throw new APIException("Authentication failed Ã¢â‚¬â€ could not load user details.");
         }
 
         String jwtToken = jwtUtils.generateJwtToken(userDetails);
@@ -106,7 +101,7 @@ public class AuthServiceImpl implements AuthService {
             String generatedOtp = generateAndSetOtp(user.getEmail());
             emailService.sendOtpEmail(user.getEmail(), generatedOtp);
         } catch (Exception e) {
-            // Account is created but email failed — surface a clear error.
+            // Account is created but email failed Ã¢â‚¬â€ surface a clear error.
             // The user can request a resend OTP.
             logger.error("OTP email send failed for new user registration: {}", e.getClass().getSimpleName());
             throw new APIException("Account created, but failed to send verification email. Please use Resend OTP.");
@@ -131,46 +126,12 @@ public class AuthServiceImpl implements AuthService {
 
         return new UserInfoResponse(
                 userDetails.getId(),
-                null,   // Never return a new JWT on a simple GET — client already has one
+                null,   // Never return a new JWT on a simple GET Ã¢â‚¬â€ client already has one
                 userDetails.getName(),
                 userDetails.getUsername(),
                 userRecord.getPlanTier().name(),
                 userRecord.getRole().name()
         );
-    }
-
-    // =========================================================================
-    // AVATAR UPLOAD
-    // =========================================================================
-
-    @Override
-    @Transactional
-    public UserInfoResponse uploadAvatar(MultipartFile image, Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new APIException("Not authenticated.");
-        }
-        User user = userRepository.findByEmail(authentication.getName())
-                .orElseThrow(() -> new APIException("User not found."));
-
-        try {
-            // fileService.uploadImage returns the stored file name/path
-            String uploadedFileName = fileService.uploadImage("avatars", image);
-            // Note: avatar URL is not persisted on User entity by default — extend if needed
-            userRepository.save(user);
-
-            UserDetailsImpl userDetails = (UserDetailsImpl) authentication.getPrincipal();
-            return new UserInfoResponse(
-                    userDetails.getId(),
-                    null,
-                    userDetails.getName(),
-                    userDetails.getUsername(),
-                    user.getPlanTier().name(),
-                    user.getRole().name()
-            );
-        } catch (Exception e) {
-            logger.error("Avatar upload failed: {}", e.getClass().getSimpleName());
-            throw new APIException("Avatar upload failed. Please try again.");
-        }
     }
 
     // =========================================================================
@@ -218,8 +179,8 @@ public class AuthServiceImpl implements AuthService {
 
     // =========================================================================
     // OTP: INTERNAL VERIFIER
-    // setVerified=true  → signup verification path
-    // setVerified=false → password-reset path (account state not changed)
+    // setVerified=true  Ã¢â€ â€™ signup verification path
+    // setVerified=false Ã¢â€ â€™ password-reset path (account state not changed)
     // =========================================================================
 
     @Transactional
@@ -236,7 +197,7 @@ public class AuthServiceImpl implements AuthService {
         }
 
         if (user.getOtp().equals(enteredOtp)) {
-            // SUCCESS — clear OTP fields
+            // SUCCESS Ã¢â‚¬â€ clear OTP fields
             if (setVerified) {
                 user.setVerified(true);
             }
@@ -247,7 +208,7 @@ public class AuthServiceImpl implements AuthService {
             userRepository.save(user);
             return true;
         } else {
-            // FAILURE — increment attempt counter
+            // FAILURE Ã¢â‚¬â€ increment attempt counter
             int attempts = user.getOtpAttempts() + 1;
             user.setOtpAttempts(attempts);
 
@@ -278,11 +239,11 @@ public class AuthServiceImpl implements AuthService {
                 String generatedOtp = generateAndSetOtp(user.getEmail());
                 emailService.sendOtpEmail(user.getEmail(), generatedOtp);
             } catch (Exception e) {
-                // Swallow silently — caller always gets the same vague response
+                // Swallow silently Ã¢â‚¬â€ caller always gets the same vague response
                 logger.warn("Could not send password reset OTP: {}", e.getClass().getSimpleName());
             }
         });
-        // Same message whether email exists or not — prevents account enumeration
+        // Same message whether email exists or not Ã¢â‚¬â€ prevents account enumeration
         return new MessageResponse("If that email is registered, a reset code has been sent.");
     }
 
@@ -296,7 +257,7 @@ public class AuthServiceImpl implements AuthService {
     @Transactional
     public MessageResponse resetPassword(String email, String otp, String newPassword) {
         // verifyOtpInternal with setVerified=false: clears OTP but does NOT
-        // change isVerified — prevents the reset flow from being used to
+        // change isVerified Ã¢â‚¬â€ prevents the reset flow from being used to
         // skip email verification.
         verifyOtpInternal(email, otp, false);
 
@@ -307,21 +268,5 @@ public class AuthServiceImpl implements AuthService {
         userRepository.save(user);
 
         return new MessageResponse("Password successfully reset. You can now log in.");
-    }
-
-    // =========================================================================
-    // PRIVATE HELPER
-    // =========================================================================
-
-    private String constructAvatarUrl(String avatarIdentifier) {
-        if (avatarIdentifier == null || avatarIdentifier.trim().isEmpty()) {
-            return imageBaseUrl.endsWith("/") ? imageBaseUrl + "default-avatar.png"
-                    : imageBaseUrl + "/default-avatar.png";
-        }
-        if (avatarIdentifier.startsWith("http://") || avatarIdentifier.startsWith("https://")) {
-            return avatarIdentifier;
-        }
-        return imageBaseUrl.endsWith("/") ? imageBaseUrl + avatarIdentifier
-                : imageBaseUrl + "/" + avatarIdentifier;
-    }
+    }
 }
