@@ -27,11 +27,9 @@ public class DataSeeder implements CommandLineRunner {
 
     @Override
     public void run(String... args) throws Exception {
-        // Check if the admin already exists
         if (userRepository.findByEmail(adminEmail).isEmpty()) {
             User admin = new User();
 
-            // 🛡️ THE FIX: Name is now explicitly set to prevent the ConstraintViolationException!
             admin.setName("PulseStream Admin");
             admin.setEmail(adminEmail);
             admin.setPassword(passwordEncoder.encode(adminPassword)); // Encrypted!
@@ -41,7 +39,7 @@ public class DataSeeder implements CommandLineRunner {
             admin.setVerified(true);
 
             userRepository.save(admin);
-            System.out.println("🛡️ Master Admin Account Created: " + adminEmail);
+            System.out.println("Master Admin Account Created: " + adminEmail);
         }
     }
 }
