@@ -1,8 +1,11 @@
 package com.netflix.streaming.platform.service;
 
+import com.netflix.streaming.platform.exceptions.APIException;
+import com.netflix.streaming.platform.exceptions.ResourceNotFoundException;
 import com.netflix.streaming.platform.model.Content;
 import com.netflix.streaming.platform.model.Episode;
 import com.netflix.streaming.platform.model.Season;
+import com.netflix.streaming.platform.model.User;
 import com.netflix.streaming.platform.payload.ContentDTO;
 import com.netflix.streaming.platform.payload.ContentResponse;
 import com.netflix.streaming.platform.payload.EpisodeDTO;
@@ -10,6 +13,7 @@ import com.netflix.streaming.platform.payload.SeasonDTO;
 import com.netflix.streaming.platform.repositories.ContentRepository;
 import com.netflix.streaming.platform.repositories.EpisodeRepository;
 import com.netflix.streaming.platform.repositories.SeasonRepository;
+import com.netflix.streaming.platform.repositories.UserRepository;
 import org.modelmapper.ModelMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -19,14 +23,17 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 @Service
-@Transactional
 public class ContentServiceImpl implements ContentService {
 
     private static final Logger log = LoggerFactory.getLogger(ContentServiceImpl.class);
@@ -53,6 +60,9 @@ public class ContentServiceImpl implements ContentService {
     @Autowired
     private AzureBlobService azureBlobService;
 
+    @Autowired
+    private UserRepository userRepository;
+
     @Value("${image.base.url:http://localhost:8080/images/}")
     private String imageBaseUrl;
 
@@ -64,6 +74,7 @@ public class ContentServiceImpl implements ContentService {
 
 
     @Override
+    @Transactional(readOnly = true)
     public ContentResponse getAllContent(Integer pageNumber, Integer pageSize, String sortBy, String sortOrder) {
 
         Sort sortByAndOrder = sortOrder.equalsIgnoreCase("asc")
@@ -77,6 +88,7 @@ public class ContentServiceImpl implements ContentService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public ContentResponse getContentByType(com.netflix.streaming.platform.model.MediaType type, Integer pageNumber, Integer pageSize, String sortBy, String sortOrder) {
 
         Sort sortByAndOrder = sortOrder.equalsIgnoreCase("asc")
@@ -272,7 +284,73 @@ public class ContentServiceImpl implements ContentService {
         return modelMapper.map(savedEpisode, EpisodeDTO.class);
     }
 
-    // --- The Holy Grail Image URL Constructor ---
+    // =========================================================================
+    // WATCHLIST (user-level via @ElementCollection on User)
+    // SECURITY: identity always derived from JWT (Authentication), never from
+    // a client-supplied userId in the URL. This prevents IDOR attacks.
+    // =========================================================================
+
+    private User resolveUserFromAuth(Authentication auth) {
+        if (auth == null || !auth.isAuthenticated()) {
+            throw new APIException("Not authenticated.");
+        }
+        return userRepository.findByEmail(auth.getName())
+                .orElseThrow(() -> new ResourceNotFoundException("User", "email", auth.getName()));
+    }
+
+    private ContentDTO toWatchlistDTO(Content c) {
+        ContentDTO dto = new ContentDTO();
+        dto.setId(c.getId());
+        dto.setTitle(c.getTitle());
+        dto.setDescription(c.getDescription());
+        dto.setReleaseYear(c.getReleaseYear());
+        dto.setThumbnailUrl(constructImageUrl(c.getThumbnailUrl()));
+        dto.setBannerUrl(constructImageUrl(c.getBannerUrl()));
+        dto.setContentType(c.getContentType());
+        dto.setDurationMinutes(c.getDurationMinutes());
+        return dto;
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<ContentDTO> getWatchlist(Authentication auth) {
+        User user = resolveUserFromAuth(auth);
+        Set<Long> ids = user.getWatchlistContentIds();
+        if (ids == null || ids.isEmpty()) return Collections.emptyList();
+        return contentRepository.findByIdIn(ids).stream().map(this::toWatchlistDTO).toList();
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> addToWatchlist(Authentication auth, Long contentId) {
+        User user = resolveUserFromAuth(auth);
+        // Verify content exists before adding
+        if (!contentRepository.existsById(contentId)) {
+            throw new ResourceNotFoundException("Content", "id", contentId);
+        }
+        user.getWatchlistContentIds().add(contentId);
+        userRepository.save(user);
+        return Map.of("inWatchlist", true, "contentId", contentId);
+    }
+
+    @Override
+    @Transactional
+    public Map<String, Object> removeFromWatchlist(Authentication auth, Long contentId) {
+        User user = resolveUserFromAuth(auth);
+        user.getWatchlistContentIds().remove(contentId);
+        userRepository.save(user);
+        return Map.of("inWatchlist", false, "contentId", contentId);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<String, Object> checkWatchlist(Authentication auth, Long contentId) {
+        User user = resolveUserFromAuth(auth);
+        boolean inList = user.getWatchlistContentIds().contains(contentId);
+        return Map.of("inWatchlist", inList, "contentId", contentId);
+    }
+
+    // --- Image URL constructor ---
     private String constructImageUrl(String imageName) {
         if (imageName == null || imageName.trim().isEmpty()) {
             return imageBaseUrl.endsWith("/") ? imageBaseUrl + "default-poster.png" : imageBaseUrl + "/default-poster.png";
@@ -283,3 +361,4 @@ public class ContentServiceImpl implements ContentService {
         return imageBaseUrl.endsWith("/") ? imageBaseUrl + imageName : imageBaseUrl + "/" + imageName;
     }
 }
+
