@@ -26,7 +26,6 @@ public class MigrationController {
 
     private static final Logger log = LoggerFactory.getLogger(MigrationController.class);
     
-    // We dynamically find the java.io.tmpdir base path like ContentServiceImpl does
     private static final String OLD_HLS_BASE = System.getProperty("java.io.tmpdir") + File.separator + "pulsestream_hls";
 
     @Autowired
@@ -83,7 +82,6 @@ public class MigrationController {
         List<String> skipped = new ArrayList<>();
         List<String> errors = new ArrayList<>();
 
-        // ── 1. Migrate all MOVIES ──────────────────────────────────────────
         List<Content> allContent = contentRepository.findAll();
         for (Content content : allContent) {
             String videoUrl = content.getVideoUrl();
@@ -109,15 +107,15 @@ public class MigrationController {
             String azureFolder = folderName.startsWith("series_") ? "series/" + folderName : "movies/" + folderName;
 
             try {
-                log.info("☁️  Migrating: {} → {}", localPath, azureFolder);
+                log.info("Migrating: {} → {}", localPath, azureFolder);
                 String azureUrl = azureBlobService.uploadHlsFolderToAzure(localPath, azureFolder);
                 content.setVideoUrl(azureUrl);
                 contentRepository.save(content);
 
                 if (deleteLocalAfter) azureBlobService.cleanupLocalDirectory(localPath);
-                migrated.add("✅ Content id=" + content.getId() + " → " + azureUrl);
+                migrated.add("Content id=" + content.getId() + " → " + azureUrl);
             } catch (Exception e) {
-                errors.add("❌ Content id=" + content.getId() + " FAILED: " + e.getMessage());
+                errors.add("Content id=" + content.getId() + " FAILED: " + e.getMessage());
             }
         }
 
@@ -148,21 +146,21 @@ public class MigrationController {
             String azureFolder = "series/" + folderName;
 
             try {
-                log.info("☁️  Migrating episode: {} → {}", localPath, azureFolder);
+                log.info(" Migrating episode: {} → {}", localPath, azureFolder);
                 String azureUrl = azureBlobService.uploadHlsFolderToAzure(localPath, azureFolder);
                 ep.setVideoUrl(azureUrl);
                 episodeRepository.save(ep);
 
                 if (deleteLocalAfter) azureBlobService.cleanupLocalDirectory(localPath);
-                migrated.add("✅ Episode id=" + ep.getId() + " → " + azureUrl);
+                migrated.add("Episode id=" + ep.getId() + " → " + azureUrl);
             } catch (Exception e) {
-                errors.add("❌ Episode id=" + ep.getId() + " FAILED: " + e.getMessage());
+                errors.add("Episode id=" + ep.getId() + " FAILED: " + e.getMessage());
             }
         }
 
         // ── 3. Build response summary ──────────────────────────────────────
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("status", errors.isEmpty() ? "✅ MIGRATION COMPLETE" : "⚠️ COMPLETED WITH ERRORS");
+        result.put("status", errors.isEmpty() ? "MIGRATION COMPLETE" : " COMPLETED WITH ERRORS");
         result.put("migrated", migrated.size());
         result.put("skipped", skipped.size());
         result.put("errors", errors.size());
@@ -192,10 +190,10 @@ public class MigrationController {
                     String decoded = URLDecoder.decode(url, StandardCharsets.UTF_8.name());
                     content.setVideoUrl(decoded);
                     contentRepository.save(content);
-                    fixed.add("✅ Content id=" + content.getId() + ": " + decoded);
+                    fixed.add(" Content id=" + content.getId() + ": " + decoded);
                     log.info("Fixed URL for content id={}", content.getId());
                 } catch (Exception e) {
-                    skipped.add("❌ Content id=" + content.getId() + ": " + e.getMessage());
+                    skipped.add("Content id=" + content.getId() + ": " + e.getMessage());
                 }
             } else {
                 skipped.add("Content id=" + content.getId() + " → no fix needed");
@@ -210,10 +208,10 @@ public class MigrationController {
                     String decoded = URLDecoder.decode(url, StandardCharsets.UTF_8.name());
                     ep.setVideoUrl(decoded);
                     episodeRepository.save(ep);
-                    fixed.add("✅ Episode id=" + ep.getId() + ": " + decoded);
+                    fixed.add("Episode id=" + ep.getId() + ": " + decoded);
                     log.info("Fixed URL for episode id={}", ep.getId());
                 } catch (Exception e) {
-                    skipped.add("❌ Episode id=" + ep.getId() + ": " + e.getMessage());
+                    skipped.add(" Episode id=" + ep.getId() + ": " + e.getMessage());
                 }
             } else {
                 skipped.add("Episode id=" + ep.getId() + " → no fix needed");
@@ -221,7 +219,7 @@ public class MigrationController {
         }
 
         Map<String, Object> result = new LinkedHashMap<>();
-        result.put("status", "✅ DONE");
+        result.put("status", "DONE");
         result.put("fixed", fixed.size());
         result.put("fixedDetails", fixed);
         result.put("skipped", skipped.size());
