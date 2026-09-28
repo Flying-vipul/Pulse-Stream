@@ -19,12 +19,12 @@ public class MyList {
     private MyListId id = new MyListId();
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("profileId") // Plugs into MyListId.profileId
+    @MapsId("profileId")
     @JoinColumn(name = "profile_id")
     private Profile profile;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @MapsId("contentId") // Plugs into MyListId.contentId
+    @MapsId("contentId")
     @JoinColumn(name = "content_id")
     private Content content;
 
