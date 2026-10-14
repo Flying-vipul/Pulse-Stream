@@ -21,7 +21,7 @@ import java.util.Map;
 
 @RestController
 @RequestMapping("/api/admin/migrate")
-@CrossOrigin(origins = {"http://localhost:5173", "http://localhost:3000"})
+@CrossOrigin(origins = {"http://localhost:5173", "http://localhost:3000","${FRONTEND_URL:http://localhost:5173}"})
 public class MigrationController {
 
     private static final Logger log = LoggerFactory.getLogger(MigrationController.class);
