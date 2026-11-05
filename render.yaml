@@ -1,0 +1,69 @@
+services:
+  - type: web
+    name: pulsestream-backend
+    runtime: docker
+    plan: free
+    image:
+      url: docker.io/vipulchoudhary/pulsestream-backend:latest
+
+    # ─── Build Phase ────────────────────────────────────────────────────────────
+    # Render runs this ONCE to compile your Spring Boot app
+    buildCommand: |
+      apt-get update && apt-get install -y ffmpeg
+      ./mvnw clean package -DskipTests
+
+    # ─── Start Phase ────────────────────────────────────────────────────────────
+    # Render runs this to actually launch your server
+    startCommand: java -Xmx300m -jar target/streaming-platform-0.0.1-SNAPSHOT.jar
+
+    # ─── Environment Variables ──────────────────────────────────────────────────
+    # These are SAFE placeholders — set the REAL values in Render Dashboard:
+    # Render Dashboard → Your Service → Environment → Add Environment Variable
+    envVars:
+      - key: AZURE_STORAGE_CONNECTION_STRING
+        sync: false   # Render will prompt you to fill this in the dashboard (never stored in Git)
+
+      - key: SPRING_DATASOURCE_URL
+        sync: false
+
+      - key: SPRING_DATASOURCE_USERNAME
+        sync: false
+
+      - key: SPRING_DATASOURCE_PASSWORD
+        sync: false
+
+      - key: RESEND_API_KEY
+        sync: false
+
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+
+      - key: RAZORPAY_KEY_ID
+        sync: false
+
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+
+      - key: CLOUDINARY_API_KEY
+        sync: false
+
+      - key: CLOUDINARY_NAME
+        sync: false
+
+      - key: JWT_SECRET
+        sync: false
+
+      - key: OAUTH_CLIENT_ID
+        sync: false
+
+      - key: OAUTH_CLIENT_SECRET
+        sync: false
+
+      - key: FRONTEND_URL
+        sync: false
+
+
+
+
+    # ─── Health Check ───────────────────────────────────────────────────────────
+    healthCheckPath: /actuator/health

@@ -11,5 +11,5 @@ public class ProfileDTO {
     private Long id;
     private String name;
 
-    // I want to  can add an 'avatarUrl' here later if you integrate Cloudinary for profile pics!
+    // I want to  can add an 'avatarUrl' here later when Cloudinary for profile pics!
 }

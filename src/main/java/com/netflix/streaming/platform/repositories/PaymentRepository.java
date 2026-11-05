@@ -7,7 +7,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
-    // 🛡️ This is the exact method PaymentServiceImpl uses to prevent duplicate charges
+    //  This is the exact method PaymentServiceImpl uses to prevent duplicate charges
     boolean existsByRazorpayOrderId(String razorpayOrderId);
 
 }

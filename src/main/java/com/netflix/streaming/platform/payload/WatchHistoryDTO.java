@@ -5,20 +5,27 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+
 @Setter
 @Getter
+@NoArgsConstructor
+@AllArgsConstructor
 public class WatchHistoryDTO {
 
     private Long contentId;
-    private int lastWatchedSeconds;
-
-
-    private String title;
-    private String thumbnailUrl;
     private Long episodeId;
+    private String title;
     private String episodeTitle;
-    private Integer totalDurationSeconds;
+    private String thumbnailUrl;
+    private int currentPositionSeconds;
+    private int durationSeconds;
+    private double progressPercentage;
+    private boolean completed;
+    private LocalDateTime lastWatchedAt;
 
-    public WatchHistoryDTO() {}
+    // Optional fields for episode details
+    private Integer seasonNumber;
+    private Integer episodeNumber;
 
 }

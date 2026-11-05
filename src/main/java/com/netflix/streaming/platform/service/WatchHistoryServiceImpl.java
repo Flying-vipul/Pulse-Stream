@@ -5,14 +5,13 @@ import com.netflix.streaming.platform.exceptions.ResourceNotFoundException;
 import com.netflix.streaming.platform.model.Content;
 import com.netflix.streaming.platform.model.Episode;
 import com.netflix.streaming.platform.model.Profile;
-import com.netflix.streaming.platform.model.User;
 import com.netflix.streaming.platform.model.WatchHistory;
+import com.netflix.streaming.platform.payload.HeartbeatRequest;
 import com.netflix.streaming.platform.payload.WatchHistoryDTO;
 import com.netflix.streaming.platform.repositories.ContentRepository;
 import com.netflix.streaming.platform.repositories.EpisodeRepository;
-import com.netflix.streaming.platform.repositories.ProfileRepository;
-import com.netflix.streaming.platform.repositories.UserRepository;
 import com.netflix.streaming.platform.repositories.WatchHistoryRepository;
+import com.netflix.streaming.platform.security.AuthUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
@@ -24,74 +23,62 @@ import java.util.Optional;
 @Service
 public class WatchHistoryServiceImpl implements WatchHistoryService {
 
+    private static final double COMPLETION_THRESHOLD = 0.90;
+
     @Autowired private WatchHistoryRepository watchHistoryRepository;
-    @Autowired private ProfileRepository profileRepository;
-    @Autowired private UserRepository userRepository;
     @Autowired private ContentRepository contentRepository;
     @Autowired private EpisodeRepository episodeRepository;
+    @Autowired private AuthUtil authUtil;
 
-    // =========================================================================
-    // OWNERSHIP RESOLUTION
-    // Always derive user from JWT principal — never trust a client-supplied ID.
-    // =========================================================================
 
-    private User resolveUser(Authentication auth) {
-        if (auth == null || !auth.isAuthenticated()) {
-            throw new APIException("Not authenticated.");
-        }
-        return userRepository.findByEmail(auth.getName())
-                .orElseThrow(() -> new ResourceNotFoundException("User", "email", auth.getName()));
-    }
-
-    /**
-     * Resolves the user''s first profile.
-     * This mirrors the original frontend contract (user has one active profile).
-     * Future work: accept profileId and verify ownership via verifyProfileOwnership().
-     */
-    private Profile resolveFirstProfile(Authentication auth) {
-        User user = resolveUser(auth);
-        List<Profile> profiles = profileRepository.findByUser(user);
-        if (profiles.isEmpty()) {
-            throw new ResourceNotFoundException("Profile", "userId", user.getId());
-        }
-        return profiles.get(0);
-    }
-
-    // =========================================================================
     // UPDATE PROGRESS (UPSERT)
-    // =========================================================================
 
     @Override
     @Transactional
-    public void updateProgress(Authentication auth, Long contentId, Long episodeId,
-                               int watchedSeconds, int totalDurationSeconds) {
+    public void updateProgress(Authentication auth, Long profileId, HeartbeatRequest request) {
+
+        int watchedSeconds = request.getPositionSeconds();
 
         // --- Input validation ---
         if (watchedSeconds < 0) {
-            throw new APIException("watchedSeconds must be >= 0.");
-        }
-        if (totalDurationSeconds <= 0) {
-            throw new APIException("totalDurationSeconds must be > 0.");
-        }
-        if (watchedSeconds > totalDurationSeconds) {
-            throw new APIException("watchedSeconds cannot exceed totalDurationSeconds.");
+            throw new APIException("positionSeconds must be >= 0.");
         }
 
-        // --- Ownership check: derive profile from JWT, never from URL ---
-        Profile profile = resolveFirstProfile(auth);
+        // --- Ownership check ---
+        Profile profile = authUtil.requireOwnedProfile(profileId, auth);
 
-        Content content = contentRepository.findById(contentId)
-                .orElseThrow(() -> new ResourceNotFoundException("Content", "id", contentId));
+        Content content = contentRepository.findById(request.getContentId())
+                .orElseThrow(() -> new ResourceNotFoundException("Content", "id", request.getContentId()));
 
         Episode episode = null;
-        if (episodeId != null) {
-            episode = episodeRepository.findById(episodeId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Episode", "id", episodeId));
+        int durationSeconds = 0;
+
+        if (request.getEpisodeId() != null) {
+            episode = episodeRepository.findById(request.getEpisodeId())
+                    .orElseThrow(() -> new ResourceNotFoundException("Episode", "id", request.getEpisodeId()));
+            
+            // Ensure episode belongs to the content
+            if (!episode.getSeason().getContent().getId().equals(content.getId())) {
+                throw new APIException("Episode does not belong to the specified content.");
+            }
+            if (episode.getDurationMinutes() != null) {
+                durationSeconds = episode.getDurationMinutes() * 60;
+            }
+        } else {
+            if (content.getDurationMinutes() != null) {
+                durationSeconds = content.getDurationMinutes() * 60;
+            }
+        }
+
+        if (durationSeconds <= 0) {
+            throw new APIException("Authoritative duration is invalid or not set in the database.");
+        }
+
+        if (watchedSeconds > durationSeconds) {
+            watchedSeconds = durationSeconds; // Clamp position to the valid duration length
         }
 
         // --- Upsert: find existing or create new ---
-        // The DB unique constraint on (profile_id, content_id, episode_id) is the
-        // final safety net against concurrent duplicate inserts.
         Optional<WatchHistory> existing = watchHistoryRepository
                 .findByProfileAndContentAndEpisode(profile, content, episode);
 
@@ -105,22 +92,20 @@ public class WatchHistoryServiceImpl implements WatchHistoryService {
 
         history.setStoppedAtSeconds(watchedSeconds);
 
-        // 90% completion rule — safe against totalDurationSeconds = 0 (validated above)
-        double pct = (double) watchedSeconds / totalDurationSeconds;
-        history.setCompleted(pct >= 0.90);
+        double pct = (double) watchedSeconds / durationSeconds;
+        history.setCompleted(pct >= COMPLETION_THRESHOLD);
 
         watchHistoryRepository.save(history);
     }
 
-    // =========================================================================
+
     // GET ACTIVE WATCH HISTORY ("Continue Watching")
-    // =========================================================================
 
     @Override
     @Transactional(readOnly = true)
-    public List<WatchHistoryDTO> getActiveWatchHistory(Authentication auth) {
-        // Ownership: profile derived from authenticated user''s JWT
-        Profile profile = resolveFirstProfile(auth);
+    public List<WatchHistoryDTO> getActiveWatchHistory(Authentication auth, Long profileId) {
+        // Ownership: verify requested profile belongs to authenticated user
+        Profile profile = authUtil.requireOwnedProfile(profileId, auth);
 
         // The @EntityGraph on this repository method JOIN FETCHes content and episode
         // in a single SQL query — no N+1 queries here.
@@ -130,26 +115,38 @@ public class WatchHistoryServiceImpl implements WatchHistoryService {
         return historyList.stream().map(this::toDTO).toList();
     }
 
-    // =========================================================================
+
     // DTO MAPPING
-    // =========================================================================
 
     private WatchHistoryDTO toDTO(WatchHistory history) {
         WatchHistoryDTO dto = new WatchHistoryDTO();
         dto.setContentId(history.getContent().getId());
-        dto.setLastWatchedSeconds(history.getStoppedAtSeconds());
+        dto.setCurrentPositionSeconds(history.getStoppedAtSeconds());
         dto.setTitle(history.getContent().getTitle());
         dto.setThumbnailUrl(history.getContent().getThumbnailUrl());
+        dto.setCompleted(history.isCompleted());
+        dto.setLastWatchedAt(history.getLastWatchedAt());
 
-        // Duration for progress bar — content stores minutes, frontend needs seconds
-        if (history.getContent().getDurationMinutes() != null) {
-            dto.setTotalDurationSeconds(history.getContent().getDurationMinutes() * 60);
-        }
+        int durationSeconds = 0;
 
-        // Episode fields are null for movies; populated for TV episodes
+        // Episode fields are populated for TV episodes
         if (history.getEpisode() != null) {
             dto.setEpisodeId(history.getEpisode().getId());
             dto.setEpisodeTitle(history.getEpisode().getTitle());
+            dto.setSeasonNumber(history.getEpisode().getSeason().getSeasonNumber());
+            dto.setEpisodeNumber(history.getEpisode().getEpisodeNumber());
+            if (history.getEpisode().getDurationMinutes() != null) {
+                durationSeconds = history.getEpisode().getDurationMinutes() * 60;
+            }
+        } else {
+            if (history.getContent().getDurationMinutes() != null) {
+                durationSeconds = history.getContent().getDurationMinutes() * 60;
+            }
+        }
+
+        dto.setDurationSeconds(durationSeconds);
+        if (durationSeconds > 0) {
+            dto.setProgressPercentage(((double) history.getStoppedAtSeconds() / durationSeconds) * 100);
         }
 
         return dto;

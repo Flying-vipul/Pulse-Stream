@@ -1,0 +1,23 @@
+# Git
+.git
+.gitignore
+
+# Build output (Stage 1 will rebuild this)
+target/
+
+# IDE files
+.idea/
+*.iml
+.vscode/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Local secrets (never bake into image)
+.env
+.env.local
+
+# Docs & misc
+README.md
+*.md
