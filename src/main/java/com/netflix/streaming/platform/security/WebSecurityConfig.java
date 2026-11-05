@@ -86,7 +86,7 @@ public class WebSecurityConfig {
                                 // 4. PROTECTED ADMIN ROUTES
                                 .requestMatchers("/api/admin/**").hasRole("ADMIN")
 
-                                // 6. DEFAULT â€” everything else needs a valid JWT
+                                // 6. DEFAULT  everything else needs a valid JWT
                                 .anyRequest().authenticated()
                 )
                 //  3. THE MAGIC OAUTH2 BLOCK: Catch the Google login and fire the custom JWT handler
@@ -104,8 +104,8 @@ public class WebSecurityConfig {
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of("http://localhost:5173", "https://thepulsestream.netlify.app"));
-        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")); // BUG-FIX: PATCH added
-        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With")); // single CORS config — CorsConfig.java deleted
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "X-Requested-With"));
         configuration.setAllowCredentials(true);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
