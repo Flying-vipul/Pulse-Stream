@@ -46,6 +46,11 @@ public class ContentController {
         return ResponseEntity.ok(contentService.getContentByType(mediaType, pageNumber, pageSize, sortBy, sortOrder));
     }
 
+    @GetMapping("/{contentId}")
+    public ResponseEntity<ContentDTO> getContentById(@PathVariable Long contentId) {
+        return ResponseEntity.ok(contentService.getContentById(contentId));
+    }
+
     @GetMapping("/v1/me/watchlist")
     public ResponseEntity<List<ContentDTO>> getWatchlist(Authentication authentication) {
         return ResponseEntity.ok(contentService.getWatchlist(authentication));
