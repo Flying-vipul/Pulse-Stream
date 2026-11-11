@@ -33,6 +33,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static com.netflix.streaming.platform.model.MediaType.TV_SHOW;
+
 @Service
 public class ContentServiceImpl implements ContentService {
 
@@ -99,6 +101,46 @@ public class ContentServiceImpl implements ContentService {
         Page<Content> pageContent = contentRepository.findByContentType(type, pageDetails);
 
         return buildContentResponse(pageContent);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public ContentDTO getContentById(Long contentId) {
+        Content content = contentRepository.findByIdWithGenres(contentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Content", "id", contentId));
+
+        if (!content.isActive()) {
+            throw new ResourceNotFoundException("Content", "id", contentId);
+        }
+
+        if (content.getContentType() == TV_SHOW) {
+            List<Season> seasons = seasonRepository.findByContentIdWithEpisodes(contentId);
+            content.setSeasons(seasons);
+        }
+
+        return mapToContentDTO(content);
+    }
+
+    private ContentDTO mapToContentDTO(Content content) {
+        ContentDTO dto = modelMapper.map(content, ContentDTO.class);
+        dto.setThumbnailUrl(constructImageUrl(content.getThumbnailUrl()));
+        dto.setBannerUrl(constructImageUrl(content.getBannerUrl()));
+
+        if (content.getSeasons() != null && !content.getSeasons().isEmpty()) {
+            List<SeasonDTO> seasonDTOs = content.getSeasons().stream().map(season -> {
+                SeasonDTO sDto = modelMapper.map(season, SeasonDTO.class);
+                if (season.getEpisodes() != null) {
+                    List<EpisodeDTO> episodeDTOs = season.getEpisodes().stream()
+                            .map(episode -> modelMapper.map(episode, EpisodeDTO.class))
+                            .toList();
+                    sDto.setEpisodes(episodeDTOs);
+                }
+                return sDto;
+            }).toList();
+            dto.setSeasons(seasonDTOs);
+        }
+
+        return dto;
     }
 
     // ── Shared helper: turns a Page<Content> into a ContentResponse ──────────
@@ -190,7 +232,7 @@ public class ContentServiceImpl implements ContentService {
     @Override
     public ContentDTO createSeriesShell(ContentDTO contentDTO, MultipartFile poster, MultipartFile banner) throws Exception {
         Content content = modelMapper.map(contentDTO, Content.class);
-        content.setContentType(com.netflix.streaming.platform.model.MediaType.TV_SHOW); // Set to SERIES
+        content.setContentType(TV_SHOW); // Set to SERIES
         content.setActive(true);
 
         // Upload images
@@ -284,11 +326,11 @@ public class ContentServiceImpl implements ContentService {
         return modelMapper.map(savedEpisode, EpisodeDTO.class);
     }
 
-    // =========================================================================
+
     // WATCHLIST (user-level via @ElementCollection on User)
     // SECURITY: identity always derived from JWT (Authentication), never from
     // a client-supplied userId in the URL. This prevents IDOR attacks.
-    // =========================================================================
+
 
     private User resolveUserFromAuth(Authentication auth) {
         if (auth == null || !auth.isAuthenticated()) {
