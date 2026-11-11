@@ -17,7 +17,9 @@ import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -56,22 +58,36 @@ public class WatchHistoryServiceImpl implements WatchHistoryService {
         if (request.getEpisodeId() != null) {
             episode = episodeRepository.findById(request.getEpisodeId())
                     .orElseThrow(() -> new ResourceNotFoundException("Episode", "id", request.getEpisodeId()));
-            
+
             // Ensure episode belongs to the content
             if (!episode.getSeason().getContent().getId().equals(content.getId())) {
                 throw new APIException("Episode does not belong to the specified content.");
             }
-            if (episode.getDurationMinutes() != null) {
+            if (episode.getDurationMinutes() != null && episode.getDurationMinutes() > 0) {
                 durationSeconds = episode.getDurationMinutes() * 60;
             }
         } else {
-            if (content.getDurationMinutes() != null) {
+            if (content.getDurationMinutes() != null && content.getDurationMinutes() > 0) {
                 durationSeconds = content.getDurationMinutes() * 60;
             }
         }
 
+        // Fallback 1: Use duration reported by client/player if database value was missing or 0
+        if (durationSeconds <= 0 && request.getDurationSeconds() != null && request.getDurationSeconds() > 0) {
+            durationSeconds = request.getDurationSeconds();
+            // Auto-heal DB duration if not set
+            if (episode != null && (episode.getDurationMinutes() == null || episode.getDurationMinutes() <= 0)) {
+                episode.setDurationMinutes(Math.max(1, durationSeconds / 60));
+                episodeRepository.save(episode);
+            } else if (episode == null && (content.getDurationMinutes() == null || content.getDurationMinutes() <= 0)) {
+                content.setDurationMinutes(Math.max(1, durationSeconds / 60));
+                contentRepository.save(content);
+            }
+        }
+
+        // Fallback 2: Safe default if database has no duration and player didn't report
         if (durationSeconds <= 0) {
-            throw new APIException("Authoritative duration is invalid or not set in the database.");
+            durationSeconds = Math.max(watchedSeconds + 60, 3600); // 1-hour safe baseline
         }
 
         if (watchedSeconds > durationSeconds) {
@@ -107,12 +123,62 @@ public class WatchHistoryServiceImpl implements WatchHistoryService {
         // Ownership: verify requested profile belongs to authenticated user
         Profile profile = authUtil.requireOwnedProfile(profileId, auth);
 
-        // The @EntityGraph on this repository method JOIN FETCHes content and episode
-        // in a single SQL query — no N+1 queries here.
+        // Fetch uncompleted watch records ordered by most recent
         List<WatchHistory> historyList = watchHistoryRepository
                 .findByProfileAndIsCompletedFalseOrderByLastWatchedAtDesc(profile);
 
-        return historyList.stream().map(this::toDTO).toList();
+        // Deduplicate by contentId so only the most recent episode of a series appears,
+        // and filter out accidental clicks (< 5 seconds watched)
+        Map<Long, WatchHistory> latestByContent = new LinkedHashMap<>();
+        for (WatchHistory wh : historyList) {
+            if (wh.getStoppedAtSeconds() >= 5) {
+                latestByContent.putIfAbsent(wh.getContent().getId(), wh);
+            }
+        }
+
+        return latestByContent.values().stream().map(this::toDTO).toList();
+    }
+
+
+    // GET PROGRESS FOR SPECIFIC CONTENT / EPISODE
+
+    @Override
+    @Transactional(readOnly = true)
+    public WatchHistoryDTO getProgressForContent(Authentication auth, Long profileId, Long contentId, Long episodeId) {
+        Profile profile = authUtil.requireOwnedProfile(profileId, auth);
+        Content content = contentRepository.findById(contentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Content", "id", contentId));
+
+        Episode episode = null;
+        if (episodeId != null) {
+            episode = episodeRepository.findById(episodeId).orElse(null);
+        }
+
+        Optional<WatchHistory> historyOpt = watchHistoryRepository
+                .findByProfileAndContentAndEpisode(profile, content, episode);
+
+        if (historyOpt.isEmpty() && episodeId == null) {
+            List<WatchHistory> list = watchHistoryRepository
+                    .findByProfileAndContentOrderByLastWatchedAtDesc(profile, content);
+            if (!list.isEmpty()) {
+                historyOpt = Optional.of(list.get(0));
+            }
+        }
+
+        return historyOpt.map(this::toDTO).orElse(null);
+    }
+
+
+    // REMOVE FROM CONTINUE WATCHING
+
+    @Override
+    @Transactional
+    public void removeFromWatchHistory(Authentication auth, Long profileId, Long contentId) {
+        Profile profile = authUtil.requireOwnedProfile(profileId, auth);
+        Content content = contentRepository.findById(contentId)
+                .orElseThrow(() -> new ResourceNotFoundException("Content", "id", contentId));
+
+        watchHistoryRepository.deleteByProfileAndContent(profile, content);
     }
 
 
@@ -124,6 +190,7 @@ public class WatchHistoryServiceImpl implements WatchHistoryService {
         dto.setCurrentPositionSeconds(history.getStoppedAtSeconds());
         dto.setTitle(history.getContent().getTitle());
         dto.setThumbnailUrl(history.getContent().getThumbnailUrl());
+        dto.setBannerUrl(history.getContent().getBannerUrl());
         dto.setCompleted(history.isCompleted());
         dto.setLastWatchedAt(history.getLastWatchedAt());
 
@@ -133,20 +200,25 @@ public class WatchHistoryServiceImpl implements WatchHistoryService {
         if (history.getEpisode() != null) {
             dto.setEpisodeId(history.getEpisode().getId());
             dto.setEpisodeTitle(history.getEpisode().getTitle());
-            dto.setSeasonNumber(history.getEpisode().getSeason().getSeasonNumber());
+            if (history.getEpisode().getSeason() != null) {
+                dto.setSeasonNumber(history.getEpisode().getSeason().getSeasonNumber());
+            }
             dto.setEpisodeNumber(history.getEpisode().getEpisodeNumber());
-            if (history.getEpisode().getDurationMinutes() != null) {
+            if (history.getEpisode().getDurationMinutes() != null && history.getEpisode().getDurationMinutes() > 0) {
                 durationSeconds = history.getEpisode().getDurationMinutes() * 60;
             }
         } else {
-            if (history.getContent().getDurationMinutes() != null) {
+            if (history.getContent().getDurationMinutes() != null && history.getContent().getDurationMinutes() > 0) {
                 durationSeconds = history.getContent().getDurationMinutes() * 60;
             }
         }
 
         dto.setDurationSeconds(durationSeconds);
         if (durationSeconds > 0) {
-            dto.setProgressPercentage(((double) history.getStoppedAtSeconds() / durationSeconds) * 100);
+            double pct = ((double) history.getStoppedAtSeconds() / durationSeconds) * 100.0;
+            dto.setProgressPercentage(Math.min(100.0, Math.max(0.0, pct)));
+        } else {
+            dto.setProgressPercentage(0.0);
         }
 
         return dto;
