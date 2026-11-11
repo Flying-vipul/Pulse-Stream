@@ -18,6 +18,7 @@ public class CreateRoomResponse {
     private Long contentId;
     private String rawInviteToken;
     private String inviteFragment;
+    private LiveKitTokenDTO liveKit;
     private RoomSnapshotDTO room;
 }
 

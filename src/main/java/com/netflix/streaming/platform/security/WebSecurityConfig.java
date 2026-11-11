@@ -76,11 +76,14 @@ public class WebSecurityConfig {
                                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                                 .requestMatchers("/api/health").permitAll()
                                 .requestMatchers("/v3/api-docs/**", "/swagger-ui/**").permitAll()
+                                .requestMatchers("/ws/watch-party/**").permitAll()
+                                .requestMatchers("/api/webhooks/livekit").permitAll()
 
                                 // 2. THE VIDEO & MEDIA GATES (These MUST be open for HLS streaming)
                                 .requestMatchers("/videos/**", "/images/**", "/avatars/**", "/streams/**").permitAll()
 
                                 // 3. AUTH & CONTENT APIS ( 2. ADDED OAUTH2 AND LOGIN ROUTES HERE)
+                                .requestMatchers(HttpMethod.GET, "/api/content/{contentId}").permitAll()
                                 .requestMatchers("/api/auth/**","/api/content/public/**", "/oauth2/**", "/login/**").permitAll()
 
                                 // 4. PROTECTED ADMIN ROUTES
