@@ -62,6 +62,20 @@ services:
       - key: FRONTEND_URL
         sync: false
 
+      # ─── Watch Party Infrastructure ──────────────────────────────────────────
+      # Secure placeholders for Redis and LiveKit integration
+      - key: SPRING_DATA_REDIS_URL
+        sync: false   # Managed Redis connection string (e.g., redis://default:pass@redis-host:6379)
+
+      - key: LIVEKIT_URL
+        sync: false   # e.g., wss://pulsestream-u8pnhy01.livekit.cloud
+
+      - key: LIVEKIT_API_KEY
+        sync: false   # LiveKit API Key
+
+      - key: LIVEKIT_API_SECRET
+        sync: false   # LiveKit API Secret (NEVER commit this)
+
 
 
 

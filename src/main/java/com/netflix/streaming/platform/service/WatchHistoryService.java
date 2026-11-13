@@ -26,5 +26,16 @@ public interface WatchHistoryService {
      * @param profileId the ID of the profile
      */
     List<WatchHistoryDTO> getActiveWatchHistory(Authentication auth, Long profileId);
+
+    /**
+     * Retrieves specific watch progress for a piece of content (and optional episode)
+     * for resume playback.
+     */
+    WatchHistoryDTO getProgressForContent(Authentication auth, Long profileId, Long contentId, Long episodeId);
+
+    /**
+     * Removes all watch history records for a specific content item under this profile.
+     */
+    void removeFromWatchHistory(Authentication auth, Long profileId, Long contentId);
 }
 
