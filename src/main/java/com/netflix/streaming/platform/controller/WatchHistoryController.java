@@ -53,9 +53,38 @@ public class WatchHistoryController {
     public ResponseEntity<List<WatchHistoryDTO>> getContinueWatching(
             Authentication authentication,
             @PathVariable Long profileId) {
-            
+
         List<WatchHistoryDTO> history = watchHistoryService.getActiveWatchHistory(authentication, profileId);
         return ResponseEntity.ok(history);
+    }
+
+    /**
+     * Retrieves specific playback resume progress for a content item / episode.
+     * GET /api/v1/profiles/{profileId}/history/progress?contentId=X&episodeId=Y
+     */
+    @GetMapping("/progress")
+    public ResponseEntity<WatchHistoryDTO> getProgress(
+            Authentication authentication,
+            @PathVariable Long profileId,
+            @RequestParam Long contentId,
+            @RequestParam(required = false) Long episodeId) {
+
+        WatchHistoryDTO dto = watchHistoryService.getProgressForContent(authentication, profileId, contentId, episodeId);
+        return ResponseEntity.ok(dto);
+    }
+
+    /**
+     * Removes all watch history records for a specific content item under this profile.
+     * DELETE /api/v1/profiles/{profileId}/history/{contentId}
+     */
+    @DeleteMapping("/{contentId}")
+    public ResponseEntity<java.util.Map<String, Object>> removeFromContinueWatching(
+            Authentication authentication,
+            @PathVariable Long profileId,
+            @PathVariable Long contentId) {
+
+        watchHistoryService.removeFromWatchHistory(authentication, profileId, contentId);
+        return ResponseEntity.ok(java.util.Map.of("success", true, "message", "Removed from continue watching."));
     }
 }
 
