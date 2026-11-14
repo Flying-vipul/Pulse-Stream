@@ -18,6 +18,7 @@ public class WatchHistoryDTO {
     private String title;
     private String episodeTitle;
     private String thumbnailUrl;
+    private String bannerUrl;
     private int currentPositionSeconds;
     private int durationSeconds;
     private double progressPercentage;
