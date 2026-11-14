@@ -19,4 +19,9 @@ public interface WatchHistoryRepository extends JpaRepository<WatchHistory, Long
 
     @EntityGraph(attributePaths = {"content", "episode"})
     List<WatchHistory> findByProfileAndIsCompletedFalseOrderByLastWatchedAtDesc(Profile profile);
+
+    @EntityGraph(attributePaths = {"content", "episode"})
+    List<WatchHistory> findByProfileAndContentOrderByLastWatchedAtDesc(Profile profile, Content content);
+
+    void deleteByProfileAndContent(Profile profile, Content content);
 }
