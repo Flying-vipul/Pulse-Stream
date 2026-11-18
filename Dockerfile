@@ -42,12 +42,6 @@ COPY --from=build /app/target/streaming-platform-0.0.1-SNAPSHOT.jar app.jar
 #  Expose the Spring Boot default port
 EXPOSE 8080
 
-# Run the app with memory-safe JVM flags for cloud deployment
-# -Xmx400m        → max heap 400MB (safe for Render free tier)
-# -XX:+UseG1GC    → G1 garbage collector (better for streaming workloads)
-# -Djava.io.tmpdir → explicitly set temp dir for HLS file creation
-ENTRYPOINT ["java", \
-  "-Xmx400m", \
-  "-XX:+UseG1GC", \
-  "-Djava.io.tmpdir=/tmp", \
-  "-jar", "app.jar"]
+# Run the app with production-ready JVM flags for VM deployment (24GB RAM ready)
+ENV JAVA_OPTS="-Xmx4g -XX:+UseG1GC"
+ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -Djava.io.tmpdir=/tmp -jar app.jar"]
