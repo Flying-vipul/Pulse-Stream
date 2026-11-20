@@ -39,5 +39,15 @@ class WatchHistoryControllerTest {
         assertEquals(200, response.getStatusCodeValue());
         verify(watchHistoryService, times(1)).updateProgress(authentication, profileId, request);
     }
+
+    @Test
+    void testRemoveFromContinueWatching() {
+        Long profileId = 10L;
+        Long contentId = 5L;
+
+        ResponseEntity<?> response = watchHistoryController.removeFromContinueWatching(authentication, profileId, contentId);
+        assertEquals(200, response.getStatusCodeValue());
+        verify(watchHistoryService, times(1)).removeFromWatchHistory(authentication, profileId, contentId);
+    }
 }
 
